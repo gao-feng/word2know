@@ -2,6 +2,7 @@
 class WordTranslator {
   constructor() {
     this.tooltip = null;
+    this.translateButton = null;
     this.currentWord = '';
     this.isLoading = false;
     this.cache = new Map();
@@ -9,14 +10,15 @@ class WordTranslator {
       enabled: true,
       autoSpeak: false
     };
-    this.hoverTimeout = null;
-    this.hideTimeout = null;
+    this.selectedText = '';
+    this.selectionRect = null;
     this.init();
   }
 
   init() {
     this.loadSettings();
     this.createTooltip();
+    this.createTranslateButton();
     this.bindEvents();
     this.listenForMessages();
   }
@@ -43,219 +45,114 @@ class WordTranslator {
     document.body.appendChild(this.tooltip);
   }
 
-  bindEvents() {
-    document.addEventListener('mouseover', this.handleMouseOver.bind(this));
-    document.addEventListener('click', this.handleClick.bind(this));
-    // 移除mouseout和mousemove事件监听，改为点击关闭
+  createTranslateButton() {
+    this.translateButton = document.createElement('button');
+    this.translateButton.className = 'translate-trigger-btn';
+    this.translateButton.innerHTML = '🌐';
+    this.translateButton.title = '翻译选中文本';
+    this.translateButton.style.display = 'none';
+    document.body.appendChild(this.translateButton);
+
+    this.translateButton.onclick = (e) => {
+      e.stopPropagation();
+      this.handleTranslateClick();
+    };
   }
 
-  handleMouseOver(event) {
+  bindEvents() {
+    document.addEventListener('mouseup', this.handleTextSelection.bind(this));
+    document.addEventListener('selectionchange', this.handleSelectionChange.bind(this));
+    document.addEventListener('click', this.handleClick.bind(this));
+  }
+
+  handleTextSelection(event) {
     if (!this.settings.enabled) return;
 
-    const word = this.getWordFromElement(event);
-    if (word && this.isEnglishWord(word)) {
-      // 如果是同一个单词，不重复处理
-      if (this.currentWord === word && this.tooltip.style.display === 'block') {
-        return;
-      }
+    setTimeout(() => {
+      const selection = window.getSelection();
+      const selectedText = selection.toString().trim();
 
-      // 清除之前的悬浮定时器
-      if (this.hoverTimeout) {
-        clearTimeout(this.hoverTimeout);
+      if (selectedText && this.isEnglishWord(selectedText)) {
+        this.selectedText = selectedText;
+        this.showTranslateButton(selection);
+      } else {
+        this.hideTranslateButton();
       }
+    }, 10); // 短暂延迟确保选择完成
+  }
 
-      // 延迟显示，避免快速移动时频繁触发
-      this.hoverTimeout = setTimeout(() => {
-        this.currentWord = word;
-        this.showTooltip(event.clientX, event.clientY);
-        this.translateWord(word);
-      }, 300); // 300ms延迟
+  handleSelectionChange() {
+    if (!this.settings.enabled) return;
+
+    const selection = window.getSelection();
+    if (selection.isCollapsed) {
+      this.hideTranslateButton();
     }
   }
 
   handleClick(event) {
-    // 如果点击的不是tooltip内部，则隐藏tooltip
-    if (this.tooltip.style.display === 'block' && !this.tooltip.contains(event.target)) {
+    // 如果点击的不是tooltip或翻译按钮，则隐藏所有UI
+    if (!this.tooltip.contains(event.target) &&
+      !this.translateButton.contains(event.target)) {
       this.hideTooltip();
+      this.hideTranslateButton();
     }
   }
 
-  // 移除handleMouseMove方法，tooltip位置将保持固定
-
-  getWordFromElement(event) {
-    const element = event.target;
-
-    // 跳过不需要翻译的元素
-    if (this.shouldSkipElement(element)) {
-      return null;
-    }
-
-    // 获取选中的文本
-    const selection = window.getSelection();
-    if (selection.rangeCount > 0 && !selection.isCollapsed) {
-      const selectedText = selection.toString().trim();
-      if (selectedText && this.isEnglishWord(selectedText)) {
-        return selectedText;
+  handleTranslateClick() {
+    if (this.selectedText) {
+      const rect = this.selectionRect;
+      if (rect) {
+        this.currentWord = this.selectedText;
+        this.showTooltip(rect.right + 10, rect.top);
+        this.translateWord(this.selectedText);
+        this.hideTranslateButton();
       }
     }
-
-    // 精确获取鼠标位置的单词
-    const word = this.getWordAtMousePosition(event);
-    return word;
   }
 
-  getWordAtMousePosition(event) {
-    // 方法1: 使用现代API - document.caretPositionFromPoint (Firefox) 或 document.caretRangeFromPoint (Chrome)
-    let range = null;
+  showTranslateButton(selection) {
+    if (selection.rangeCount === 0) return;
 
-    if (document.caretPositionFromPoint) {
-      const caretPosition = document.caretPositionFromPoint(event.clientX, event.clientY);
-      if (caretPosition) {
-        range = document.createRange();
-        range.setStart(caretPosition.offsetNode, caretPosition.offset);
-        range.setEnd(caretPosition.offsetNode, caretPosition.offset);
-      }
-    } else if (document.caretRangeFromPoint) {
-      range = document.caretRangeFromPoint(event.clientX, event.clientY);
-    }
+    const range = selection.getRangeAt(0);
+    const rect = range.getBoundingClientRect();
+    this.selectionRect = rect;
 
-    if (range && range.startContainer.nodeType === Node.TEXT_NODE) {
-      const textNode = range.startContainer;
-      const text = textNode.textContent;
-      const offset = range.startOffset;
+    // 定位翻译按钮到选中文本附近
+    const buttonX = rect.right + 5;
+    const buttonY = rect.top - 5;
 
-      // 检查光标位置是否在字母上
-      if (offset < text.length && /[a-zA-Z]/.test(text[offset])) {
-        const word = this.extractWordFromText(text, offset);
-        if (word && this.isEnglishWord(word)) {
-          return word;
-        }
-      }
-    }
-
-    // 方法2: 遍历文本节点，检查鼠标位置
-    const word = this.findWordInTextNodes(event);
-    if (word) return word;
-
-    return null;
+    this.translateButton.style.left = buttonX + 'px';
+    this.translateButton.style.top = buttonY + 'px';
+    this.translateButton.style.display = 'block';
   }
 
-  findWordInTextNodes(event) {
-    const element = event.target;
-
-    // 如果是文本节点的父元素，直接处理
-    if (element.nodeType === Node.ELEMENT_NODE) {
-      const walker = document.createTreeWalker(
-        element,
-        NodeFilter.SHOW_TEXT,
-        null,
-        false
-      );
-
-      let textNode;
-      while (textNode = walker.nextNode()) {
-        const word = this.checkTextNodeAtPosition(textNode, event);
-        if (word) return word;
-      }
-    }
-
-    return null;
-  }
-
-  checkTextNodeAtPosition(textNode, event) {
-    const text = textNode.textContent;
-    if (!text || !text.trim()) return null;
-
-    // 创建临时range来测量文本位置
-    const range = document.createRange();
-    const words = text.match(/\b[a-zA-Z]+\b/g);
-
-    if (!words) return null;
-
-    let currentIndex = 0;
-    for (const word of words) {
-      const wordIndex = text.indexOf(word, currentIndex);
-      if (wordIndex === -1) continue;
-
-      // 设置range到单词位置
-      range.setStart(textNode, wordIndex);
-      range.setEnd(textNode, wordIndex + word.length);
-
-      const rect = range.getBoundingClientRect();
-
-      // 检查鼠标是否在单词的边界框内
-      if (event.clientX >= rect.left && event.clientX <= rect.right &&
-        event.clientY >= rect.top && event.clientY <= rect.bottom) {
-
-        if (this.isEnglishWord(word)) {
-          return word;
-        }
-      }
-
-      currentIndex = wordIndex + word.length;
-    }
-
-    return null;
-  }
-
-  extractWordFromText(text, offset) {
-    if (!text || offset < 0 || offset >= text.length) return null;
-
-    // 找到单词边界
-    let start = offset;
-    let end = offset;
-
-    // 向前找单词开始
-    while (start > 0 && /[a-zA-Z]/.test(text[start - 1])) {
-      start--;
-    }
-
-    // 向后找单词结束
-    while (end < text.length && /[a-zA-Z]/.test(text[end])) {
-      end++;
-    }
-
-    const word = text.substring(start, end).trim();
-    return word;
-  }
-
-  shouldSkipElement(element) {
-    // 跳过输入框、按钮等交互元素，但允许链接
-    const skipTags = ['INPUT', 'TEXTAREA', 'BUTTON', 'SELECT', 'SCRIPT', 'STYLE', 'NOSCRIPT', 'CODE'];
-
-    // 检查当前元素
-    if (skipTags.includes(element.tagName)) return true;
-
-    // 检查是否在翻译tooltip内
-    if (element.closest('.word-translator-tooltip')) return true;
-
-    // 检查是否是可编辑元素
-    if (element.isContentEditable) return true;
-
-    // 检查特殊属性
-    if (element.getAttribute('contenteditable') === 'true') return true;
-
-    // 检查元素是否有文本内容
-    const text = element.textContent || element.innerText || '';
-    if (!text.trim()) return true;
-
-    // 检查是否是纯数字或特殊字符元素
-    if (!/[a-zA-Z]/.test(text)) return true;
-
-    return false;
+  hideTranslateButton() {
+    this.translateButton.style.display = 'none';
+    this.selectedText = '';
+    this.selectionRect = null;
   }
 
   isEnglishWord(word) {
     if (!word || typeof word !== 'string') return false;
 
-    // 检查是否只包含英文字母，长度大于1，小于50
-    const isValid = /^[a-zA-Z]+$/.test(word) && word.length > 1 && word.length < 50;
+    // 支持单词和短语（包含空格）
+    const cleanWord = word.trim();
+
+    // 检查是否包含英文字母，长度大于1，小于100
+    const hasEnglish = /[a-zA-Z]/.test(cleanWord);
+    const isValidLength = cleanWord.length > 1 && cleanWord.length < 100;
+
+    // 允许字母、空格、连字符和撇号
+    const isValidChars = /^[a-zA-Z\s\-']+$/.test(cleanWord);
+
+    if (!hasEnglish || !isValidLength || !isValidChars) return false;
 
     // 过滤掉一些常见的无意义字符串
     const skipWords = ['www', 'http', 'https', 'com', 'org', 'net', 'html', 'css', 'js'];
-    if (skipWords.includes(word.toLowerCase())) return false;
+    if (skipWords.includes(cleanWord.toLowerCase())) return false;
 
-    return isValid;
+    return true;
   }
 
   showTooltip(x, y) {

@@ -109,6 +109,43 @@
   border-top: 1px solid #f0f0f0;
 }
 
+/* 翻译触发按钮样式 */
+.translate-trigger-btn {
+  position: fixed;
+  z-index: 9999;
+  background: #1976d2;
+  color: white;
+  border: none;
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  cursor: pointer;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  transition: all 0.2s ease;
+  user-select: none;
+}
+
+.translate-trigger-btn:hover {
+  background: #1565c0;
+  transform: scale(1.1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.translate-trigger-btn:active {
+  transform: scale(0.95);
+}
+
+/* 防止与网页样式冲突 */
+.translate-trigger-btn * {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
 .pronunciation {
   color: #666;
   font-style: italic;
