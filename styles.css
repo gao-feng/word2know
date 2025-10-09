@@ -1,0 +1,92 @@
+/* 悬浮翻译tooltip样式 */
+.word-translator-tooltip {
+  position: fixed;
+  z-index: 10000;
+  background: #ffffff;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  padding: 12px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 14px;
+  line-height: 1.4;
+  max-width: 300px;
+  min-width: 200px;
+  pointer-events: auto;
+}
+
+.word-translator-tooltip .loading {
+  color: #666;
+  text-align: center;
+  padding: 8px;
+}
+
+.word-translator-tooltip .error {
+  color: #d32f2f;
+  text-align: center;
+  padding: 8px;
+}
+
+.translation-content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.word-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid #f0f0f0;
+  padding-bottom: 8px;
+}
+
+.word {
+  font-weight: 600;
+  font-size: 16px;
+  color: #1976d2;
+}
+
+.play-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 16px;
+  padding: 4px;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+}
+
+.play-btn:hover {
+  background-color: #f5f5f5;
+}
+
+.pronunciation {
+  color: #666;
+  font-style: italic;
+  font-size: 13px;
+}
+
+.translation {
+  color: #333;
+  font-weight: 500;
+}
+
+/* 防止与网页样式冲突 */
+.word-translator-tooltip * {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+/* 响应式设计 */
+@media (max-width: 480px) {
+  .word-translator-tooltip {
+    max-width: 250px;
+    font-size: 13px;
+  }
+  
+  .word {
+    font-size: 15px;
+  }
+}

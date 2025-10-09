@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>翻译插件测试页面</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .test-section {
+            margin: 30px 0;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+        
+        .test-section h3 {
+            color: #333;
+            margin-top: 0;
+        }
+        
+        a {
+            color: #1976d2;
+            text-decoration: none;
+        }
+        
+        a:hover {
+            text-decoration: underline;
+        }
+        
+        .highlight {
+            background-color: #fff3cd;
+            padding: 2px 4px;
+            border-radius: 3px;
+        }
+        
+        button {
+            background: #1976d2;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <h1>英文悬浮翻译插件测试页面</h1>
+    
+    <div class="test-section">
+        <h3>1. 普通文本测试</h3>
+        <p>This is a <span class="highlight">beautiful</span> day. The weather is absolutely <span class="highlight">wonderful</span> and perfect for outdoor activities.</p>
+        <p>Try hovering over words like: <strong>amazing</strong>, <em>incredible</em>, and <u>fantastic</u>.</p>
+    </div>
+    
+    <div class="test-section">
+        <h3>2. 链接文本测试</h3>
+        <p>Visit our <a href="#">homepage</a> for more <a href="#">information</a> about this <a href="#">project</a>.</p>
+        <p>Check out these links: <a href="#">documentation</a>, <a href="#">tutorial</a>, <a href="#">examples</a>.</p>
+    </div>
+    
+    <div class="test-section">
+        <h3>3. 不同HTML元素测试</h3>
+        <ul>
+            <li>List item with <strong>important</strong> information</li>
+            <li>Another item with <em>emphasized</em> text</li>
+            <li>Third item with <code>technical</code> terms</li>
+        </ul>
+        
+        <blockquote>
+            This is a quote containing several <span class="highlight">interesting</span> words that should trigger translation.
+        </blockquote>
+    </div>
+    
+    <div class="test-section">
+        <h3>4. 表格测试</h3>
+        <table border="1" style="border-collapse: collapse; width: 100%;">
+            <tr>
+                <th>Category</th>
+                <th>Description</th>
+                <th>Example</th>
+            </tr>
+            <tr>
+                <td>Technology</td>
+                <td>Modern software development</td>
+                <td>JavaScript, Python, React</td>
+            </tr>
+            <tr>
+                <td>Science</td>
+                <td>Research and discovery</td>
+                <td>Biology, Chemistry, Physics</td>
+            </tr>
+        </table>
+    </div>
+    
+    <div class="test-section">
+        <h3>5. 按钮和输入框（应该被跳过）</h3>
+        <button>Click me (should not translate)</button>
+        <input type="text" placeholder="Type here (should not translate)" style="margin: 10px;">
+        <textarea placeholder="Write something (should not translate)" style="margin: 10px;"></textarea>
+    </div>
+    
+    <div class="test-section">
+        <h3>6. 长文本段落测试</h3>
+        <p>
+            The <span class="highlight">development</span> of artificial intelligence has been one of the most 
+            <span class="highlight">significant</span> technological <span class="highlight">achievements</span> 
+            of the 21st century. Machine learning algorithms can now perform complex tasks that were once 
+            thought to be exclusively human capabilities. Natural language processing enables computers 
+            to understand and generate human language with remarkable accuracy.
+        </p>
+    </div>
+    
+    <div class="test-section">
+        <h3>使用说明</h3>
+        <ol>
+            <li>确保已安装并启用翻译插件</li>
+            <li>将鼠标悬浮在英文单词上</li>
+            <li>等待翻译窗口出现（约300ms延迟）</li>
+            <li>点击🔊按钮测试发音功能</li>
+            <li>移开鼠标，翻译窗口会自动隐藏</li>
+        </ol>
+    </div>
+</body>
+</html>

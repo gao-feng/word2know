@@ -1,0 +1,24 @@
+{
+  "manifest_version": 3,
+  "name": "英文悬浮翻译",
+  "version": "1.0",
+  "description": "鼠标悬浮英文单词时显示中文翻译和读音",
+  "permissions": [
+    "activeTab",
+    "storage"
+  ],
+  "host_permissions": [
+    "https://translate.googleapis.com/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "css": ["styles.css"]
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "英文悬浮翻译"
+  }
+}
