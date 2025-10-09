@@ -250,6 +250,7 @@ class WordTranslator {
         <div class="word-header">
           <span class="word">${data.word}</span>
           <button class="play-btn">🔊</button>
+          <button class="add-word-btn" title="添加到生词表">⭐</button>
           <button class="close-btn">✕</button>
         </div>
         <div class="pronunciation">${data.pronunciation}</div>
@@ -266,6 +267,15 @@ class WordTranslator {
       playBtn.onclick = (e) => {
         e.stopPropagation();
         this.speakWord(data.word);
+      };
+    }
+
+    // 绑定添加生词按钮事件
+    const addWordBtn = this.tooltip.querySelector('.add-word-btn');
+    if (addWordBtn) {
+      addWordBtn.onclick = (e) => {
+        e.stopPropagation();
+        this.addToVocabulary(data);
       };
     }
 
@@ -291,6 +301,75 @@ class WordTranslator {
       utterance.rate = 0.8;
       speechSynthesis.speak(utterance);
     }
+  }
+
+  async addToVocabulary(data) {
+    try {
+      // 获取现有生词表
+      const result = await chrome.storage.sync.get(['vocabulary']);
+      const vocabulary = result.vocabulary || [];
+
+      // 检查是否已存在
+      const exists = vocabulary.some(item => item.word.toLowerCase() === data.word.toLowerCase());
+
+      if (exists) {
+        this.showMessage('该单词已在生词表中');
+        return;
+      }
+
+      // 添加新单词
+      const newWord = {
+        word: data.word,
+        translation: data.translation,
+        pronunciation: data.pronunciation,
+        addedAt: new Date().toISOString()
+      };
+
+      vocabulary.unshift(newWord); // 添加到开头
+
+      // 限制生词表大小（最多500个）
+      if (vocabulary.length > 500) {
+        vocabulary.splice(500);
+      }
+
+      // 保存到存储
+      await chrome.storage.sync.set({ vocabulary });
+
+      this.showMessage('已添加到生词表');
+
+    } catch (error) {
+      console.error('添加生词失败:', error);
+      this.showMessage('添加失败');
+    }
+  }
+
+  showMessage(message) {
+    // 在tooltip中显示临时消息
+    const messageDiv = document.createElement('div');
+    messageDiv.className = 'temp-message';
+    messageDiv.textContent = message;
+    messageDiv.style.cssText = `
+      position: absolute;
+      top: -30px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #4caf50;
+      color: white;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      white-space: nowrap;
+      z-index: 10001;
+    `;
+
+    this.tooltip.appendChild(messageDiv);
+
+    // 2秒后移除消息
+    setTimeout(() => {
+      if (messageDiv.parentNode) {
+        messageDiv.parentNode.removeChild(messageDiv);
+      }
+    }, 2000);
   }
 }
 
