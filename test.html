@@ -118,6 +118,32 @@
     </div>
     
     <div class="test-section">
+        <h3>7. 精确定位测试</h3>
+        <p style="font-size: 18px; line-height: 2;">
+            请精确悬停在每个单词上：<br>
+            <span style="margin: 0 10px;">beautiful</span>
+            <span style="margin: 0 10px;">wonderful</span>
+            <span style="margin: 0 10px;">amazing</span>
+            <span style="margin: 0 10px;">incredible</span>
+        </p>
+        <p>
+            测试空白区域：在这些单词之间的空白处悬停应该不会触发翻译。
+        </p>
+    </div>
+    
+    <div class="test-section">
+        <h3>8. 边界测试</h3>
+        <div style="border: 1px solid #ccc; padding: 10px; margin: 10px 0;">
+            <span>word1</span> <span>word2</span> <span>word3</span>
+        </div>
+        <div style="display: flex; gap: 20px;">
+            <span>left</span>
+            <span>middle</span>
+            <span>right</span>
+        </div>
+    </div>
+    
+    <div class="test-section">
         <h3>使用说明</h3>
         <ol>
             <li>确保已安装并启用翻译插件</li>

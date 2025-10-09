@@ -99,83 +99,100 @@ class WordTranslator {
       }
     }
 
-    // 方法1: 尝试使用caretRangeFromPoint
-    let word = this.getWordFromCaretRange(event);
-    if (word) return word;
-
-    // 方法2: 从元素文本内容中提取单词
-    word = this.getWordFromElementText(element, event);
-    if (word) return word;
-
-    // 方法3: 遍历所有文本节点寻找单词
-    word = this.getWordFromTextNodes(element, event);
-    if (word) return word;
-
-    return null;
+    // 精确获取鼠标位置的单词
+    const word = this.getWordAtMousePosition(event);
+    return word;
   }
 
-  getWordFromCaretRange(event) {
-    try {
-      const range = document.caretRangeFromPoint(event.clientX, event.clientY);
-      if (!range) return null;
+  getWordAtMousePosition(event) {
+    // 方法1: 使用现代API - document.caretPositionFromPoint (Firefox) 或 document.caretRangeFromPoint (Chrome)
+    let range = null;
 
+    if (document.caretPositionFromPoint) {
+      const caretPosition = document.caretPositionFromPoint(event.clientX, event.clientY);
+      if (caretPosition) {
+        range = document.createRange();
+        range.setStart(caretPosition.offsetNode, caretPosition.offset);
+        range.setEnd(caretPosition.offsetNode, caretPosition.offset);
+      }
+    } else if (document.caretRangeFromPoint) {
+      range = document.caretRangeFromPoint(event.clientX, event.clientY);
+    }
+
+    if (range && range.startContainer.nodeType === Node.TEXT_NODE) {
       const textNode = range.startContainer;
-      if (textNode.nodeType !== Node.TEXT_NODE) return null;
-
       const text = textNode.textContent;
       const offset = range.startOffset;
 
-      return this.extractWordFromText(text, offset);
-    } catch (e) {
-      return null;
-    }
-  }
-
-  getWordFromElementText(element, event) {
-    const text = element.textContent || element.innerText || '';
-    if (!text) return null;
-
-    // 简单处理：如果元素文本很短且是单个单词，直接返回
-    const trimmedText = text.trim();
-    if (trimmedText.length < 50 && this.isEnglishWord(trimmedText)) {
-      return trimmedText;
-    }
-
-    // 从文本中提取所有英文单词
-    const words = text.match(/\b[a-zA-Z]+\b/g);
-    if (words && words.length > 0) {
-      // 返回第一个有效单词
-      for (const word of words) {
-        if (this.isEnglishWord(word)) {
+      // 检查光标位置是否在字母上
+      if (offset < text.length && /[a-zA-Z]/.test(text[offset])) {
+        const word = this.extractWordFromText(text, offset);
+        if (word && this.isEnglishWord(word)) {
           return word;
         }
       }
     }
 
+    // 方法2: 遍历文本节点，检查鼠标位置
+    const word = this.findWordInTextNodes(event);
+    if (word) return word;
+
     return null;
   }
 
-  getWordFromTextNodes(element, event) {
-    const walker = document.createTreeWalker(
-      element,
-      NodeFilter.SHOW_TEXT,
-      null,
-      false
-    );
+  findWordInTextNodes(event) {
+    const element = event.target;
 
-    let textNode;
-    while (textNode = walker.nextNode()) {
-      const text = textNode.textContent;
-      if (!text) continue;
+    // 如果是文本节点的父元素，直接处理
+    if (element.nodeType === Node.ELEMENT_NODE) {
+      const walker = document.createTreeWalker(
+        element,
+        NodeFilter.SHOW_TEXT,
+        null,
+        false
+      );
 
-      const words = text.match(/\b[a-zA-Z]+\b/g);
-      if (words) {
-        for (const word of words) {
-          if (this.isEnglishWord(word)) {
-            return word;
-          }
+      let textNode;
+      while (textNode = walker.nextNode()) {
+        const word = this.checkTextNodeAtPosition(textNode, event);
+        if (word) return word;
+      }
+    }
+
+    return null;
+  }
+
+  checkTextNodeAtPosition(textNode, event) {
+    const text = textNode.textContent;
+    if (!text || !text.trim()) return null;
+
+    // 创建临时range来测量文本位置
+    const range = document.createRange();
+    const words = text.match(/\b[a-zA-Z]+\b/g);
+
+    if (!words) return null;
+
+    let currentIndex = 0;
+    for (const word of words) {
+      const wordIndex = text.indexOf(word, currentIndex);
+      if (wordIndex === -1) continue;
+
+      // 设置range到单词位置
+      range.setStart(textNode, wordIndex);
+      range.setEnd(textNode, wordIndex + word.length);
+
+      const rect = range.getBoundingClientRect();
+
+      // 检查鼠标是否在单词的边界框内
+      if (event.clientX >= rect.left && event.clientX <= rect.right &&
+        event.clientY >= rect.top && event.clientY <= rect.bottom) {
+
+        if (this.isEnglishWord(word)) {
+          return word;
         }
       }
+
+      currentIndex = wordIndex + word.length;
     }
 
     return null;
@@ -204,7 +221,7 @@ class WordTranslator {
 
   shouldSkipElement(element) {
     // 跳过输入框、按钮等交互元素，但允许链接
-    const skipTags = ['INPUT', 'TEXTAREA', 'BUTTON', 'SELECT', 'SCRIPT', 'STYLE', 'NOSCRIPT'];
+    const skipTags = ['INPUT', 'TEXTAREA', 'BUTTON', 'SELECT', 'SCRIPT', 'STYLE', 'NOSCRIPT', 'CODE'];
 
     // 检查当前元素
     if (skipTags.includes(element.tagName)) return true;
@@ -217,6 +234,13 @@ class WordTranslator {
 
     // 检查特殊属性
     if (element.getAttribute('contenteditable') === 'true') return true;
+
+    // 检查元素是否有文本内容
+    const text = element.textContent || element.innerText || '';
+    if (!text.trim()) return true;
+
+    // 检查是否是纯数字或特殊字符元素
+    if (!/[a-zA-Z]/.test(text)) return true;
 
     return false;
   }
