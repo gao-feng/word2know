@@ -191,22 +191,63 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     const html = vocabulary.map((item, index) => `
-      <div class="vocab-item ${item.ankiSynced ? 'synced' : 'unsynced'}">
+      <div class="vocab-item ${item.ankiSynced ? 'synced' : 'unsynced'}" data-word="${escapeHtml(item.word)}" data-added-at="${item.addedAt}">
         <div class="vocab-content">
           <div class="vocab-word">
-            ${item.word}
+            ${escapeHtml(item.word)}
             ${item.ankiSynced ? '<span class="sync-status" title="已同步到Anki">✓</span>' : '<span class="sync-status" title="未同步">○</span>'}
           </div>
-          <div class="vocab-translation">${item.translation}</div>
+          <div class="vocab-translation">${escapeHtml(item.translation)}</div>
         </div>
         <div class="vocab-actions">
-          <button class="vocab-btn" onclick="speakWord('${item.word}')" title="发音">🔊</button>
-          <button class="vocab-btn" onclick="removeWord(${index})" title="删除">🗑️</button>
+          <button class="vocab-btn speak-btn" data-word="${escapeHtml(item.word)}" title="发音">🔊</button>
+          <button class="vocab-btn delete-btn" data-word="${escapeHtml(item.word)}" data-added-at="${item.addedAt}" title="删除">🗑️</button>
         </div>
       </div>
     `).join('');
 
     vocabularyList.innerHTML = html;
+    
+    // 绑定按钮事件（使用事件委托）
+    bindVocabularyEvents();
+  }
+
+  // HTML转义函数
+  function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
+
+  // 绑定生词表按钮事件
+  function bindVocabularyEvents() {
+    const vocabularyList = document.getElementById('vocabularyList');
+    
+    // 移除之前的事件监听器（如果有）
+    vocabularyList.removeEventListener('click', handleVocabularyClick);
+    
+    // 添加事件委托
+    vocabularyList.addEventListener('click', handleVocabularyClick);
+  }
+
+  // 处理生词表按钮点击事件
+  function handleVocabularyClick(event) {
+    const target = event.target;
+    
+    if (target.classList.contains('speak-btn')) {
+      // 发音按钮
+      const word = target.getAttribute('data-word');
+      if (word) {
+        speakWord(word);
+      }
+    } else if (target.classList.contains('delete-btn')) {
+      // 删除按钮
+      const word = target.getAttribute('data-word');
+      const addedAt = target.getAttribute('data-added-at');
+      if (word && addedAt) {
+        removeWordSafe(word, addedAt);
+      }
+    }
   }
 
   function clearVocabulary() {
@@ -215,25 +256,69 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
-  // 全局函数，供HTML调用
-  window.speakWord = function(word) {
+  // 发音函数
+  function speakWord(word) {
     if ('speechSynthesis' in window) {
       const utterance = new SpeechSynthesisUtterance(word);
       utterance.lang = 'en-US';
       utterance.rate = 0.8;
       speechSynthesis.speak(utterance);
     }
-  };
+  }
 
+  // 保持全局函数以兼容其他可能的调用
+  window.speakWord = speakWord;
+
+  // 保留旧的removeWord函数以兼容性（如果有其他地方调用）
   window.removeWord = function(index) {
     chrome.storage.sync.get(['vocabulary'], function(result) {
       const vocabulary = result.vocabulary || [];
-      vocabulary.splice(index, 1);
-      chrome.storage.sync.set({ vocabulary }, function() {
-        loadVocabulary();
-      });
+      if (index >= 0 && index < vocabulary.length) {
+        vocabulary.splice(index, 1);
+        chrome.storage.sync.set({ vocabulary }, function() {
+          loadVocabulary();
+        });
+      }
     });
   };
+
+  // 新的安全删除函数，使用单词和添加时间作为唯一标识
+  function removeWordSafe(word, addedAt) {
+    if (!confirm(`确定要删除生词 "${word}" 吗？`)) {
+      return;
+    }
+
+    chrome.storage.sync.get(['vocabulary'], function(result) {
+      const vocabulary = result.vocabulary || [];
+      
+      // 使用单词和添加时间来精确匹配要删除的生词
+      const indexToRemove = vocabulary.findIndex(item => 
+        item.word === word && item.addedAt === addedAt
+      );
+      
+      if (indexToRemove !== -1) {
+        const removedWord = vocabulary[indexToRemove];
+        vocabulary.splice(indexToRemove, 1);
+        
+        chrome.storage.sync.set({ vocabulary }, function() {
+          if (chrome.runtime.lastError) {
+            console.error('删除生词失败:', chrome.runtime.lastError);
+            showMessage(`删除失败: ${chrome.runtime.lastError.message}`, 'error');
+          } else {
+            console.log(`成功删除生词: ${removedWord.word}`);
+            showMessage(`已删除生词: ${removedWord.word}`, 'success');
+            loadVocabulary();
+          }
+        });
+      } else {
+        console.warn(`未找到要删除的生词: ${word}`);
+        showMessage('未找到要删除的生词', 'error');
+      }
+    });
+  }
+
+  // 保持全局函数以兼容其他可能的调用
+  window.removeWordSafe = removeWordSafe;
 
   function exportToAnki() {
     chrome.storage.sync.get(['vocabulary'], function(result) {
@@ -378,6 +463,33 @@ document.addEventListener('DOMContentLoaded', function() {
       const result = await chrome.storage.sync.get(['vocabulary']);
       const vocabulary = result.vocabulary || [];
       
+      // 检查牌组是否存在，如果不存在则创建
+      const deckName = '英语生词';
+      syncBtn.textContent = '🔄 检查牌组...';
+      
+      const deckNames = await ankiConnect.getDeckNames();
+      if (!deckNames.includes(deckName)) {
+        console.log(`牌组 "${deckName}" 不存在，正在创建...`);
+        await ankiConnect.createDeck(deckName);
+        showSyncMessage(`已重新创建牌组 "${deckName}"`, 'info');
+        
+        // 如果牌组被删除了，需要重置所有生词的同步状态
+        let needsReset = false;
+        for (let item of vocabulary) {
+          if (item.ankiSynced) {
+            item.ankiSynced = false;
+            delete item.ankiNoteId;
+            delete item.syncedAt;
+            needsReset = true;
+          }
+        }
+        
+        if (needsReset) {
+          await chrome.storage.sync.set({ vocabulary });
+          console.log('已重置所有生词的同步状态');
+        }
+      }
+      
       // 筛选未同步的单词
       const unsyncedWords = vocabulary.filter(item => !item.ankiSynced);
       
@@ -395,16 +507,27 @@ document.addEventListener('DOMContentLoaded', function() {
       
       // 更新同步状态
       let successCount = 0;
+      let skippedCount = 0;
+      
       for (let i = 0; i < unsyncedWords.length; i++) {
-        if (noteIds[i] !== null) {
-          const wordIndex = vocabulary.findIndex(item => 
-            item.word === unsyncedWords[i].word && !item.ankiSynced
-          );
-          if (wordIndex !== -1) {
+        const wordIndex = vocabulary.findIndex(item => 
+          item.word === unsyncedWords[i].word && !item.ankiSynced
+        );
+        
+        if (wordIndex !== -1) {
+          if (noteIds[i] !== null) {
+            // 成功添加到Anki
             vocabulary[wordIndex].ankiSynced = true;
             vocabulary[wordIndex].ankiNoteId = noteIds[i];
             vocabulary[wordIndex].syncedAt = new Date().toISOString();
             successCount++;
+          } else {
+            // 跳过（已存在或其他原因）
+            // 仍然标记为已同步，避免重复尝试
+            vocabulary[wordIndex].ankiSynced = true;
+            vocabulary[wordIndex].ankiNoteId = 'skipped';
+            vocabulary[wordIndex].syncedAt = new Date().toISOString();
+            skippedCount++;
           }
         }
       }
@@ -415,7 +538,19 @@ document.addEventListener('DOMContentLoaded', function() {
       // 刷新显示
       loadVocabulary();
       
-      showSyncMessage(`成功同步 ${successCount} 个生词到Anki`, 'success');
+      // 显示同步结果
+      let message = '';
+      if (successCount > 0 && skippedCount > 0) {
+        message = `同步完成：新增 ${successCount} 个，跳过 ${skippedCount} 个已存在的生词`;
+      } else if (successCount > 0) {
+        message = `成功同步 ${successCount} 个生词到Anki`;
+      } else if (skippedCount > 0) {
+        message = `${skippedCount} 个生词已存在于Anki中`;
+      } else {
+        message = '同步完成，但没有处理任何生词';
+      }
+      
+      showSyncMessage(message, 'success');
 
     } catch (error) {
       console.error('同步失败:', error);
@@ -446,8 +581,8 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
-  // 显示同步消息
-  function showSyncMessage(message, type = 'info') {
+  // 通用消息显示函数
+  function showMessage(message, type = 'info') {
     const messageDiv = document.createElement('div');
     messageDiv.textContent = message;
     
@@ -476,7 +611,12 @@ document.addEventListener('DOMContentLoaded', function() {
       if (messageDiv.parentNode) {
         messageDiv.parentNode.removeChild(messageDiv);
       }
-    }, 4000);
+    }, 3000);
+  }
+
+  // 显示同步消息（使用通用函数）
+  function showSyncMessage(message, type = 'info') {
+    showMessage(message, type);
   }
 
   // 更新API设置可见性
