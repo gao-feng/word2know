@@ -2,6 +2,22 @@
 document.addEventListener('DOMContentLoaded', function() {
   const enableToggle = document.getElementById('enableToggle');
   const autoSpeakToggle = document.getElementById('autoSpeakToggle');
+  const translationServiceSelect = document.getElementById('translationService');
+  
+  // 硅基流动设置元素
+  const siliconFlowApiKeyInput = document.getElementById('siliconFlowApiKey');
+  const testSiliconFlowApiKeyBtn = document.getElementById('testSiliconFlowApiKey');
+  const saveSiliconFlowApiKeyBtn = document.getElementById('saveSiliconFlowApiKey');
+  const siliconFlowApiStatusDiv = document.getElementById('siliconFlowApiStatus');
+  
+  // OpenAI设置元素
+  const openaiProviderSelect = document.getElementById('openaiProvider');
+  const openaiBaseUrlInput = document.getElementById('openaiBaseUrl');
+  const openaiModelInput = document.getElementById('openaiModel');
+  const openaiApiKeyInput = document.getElementById('openaiApiKey');
+  const testOpenAIConfigBtn = document.getElementById('testOpenAIConfig');
+  const saveOpenAIConfigBtn = document.getElementById('saveOpenAIConfig');
+  const openaiApiStatusDiv = document.getElementById('openaiApiStatus');
   const tabBtns = document.querySelectorAll('.tab-btn');
   const settingsTab = document.getElementById('settingsTab');
   const vocabularyTab = document.getElementById('vocabularyTab');
@@ -21,6 +37,33 @@ document.addEventListener('DOMContentLoaded', function() {
   autoSpeakToggle.addEventListener('click', function() {
     toggleSetting('autoSpeak', autoSpeakToggle);
   });
+
+  translationServiceSelect.addEventListener('change', function() {
+    const service = this.value;
+    chrome.storage.sync.set({ translationService: service });
+    
+    // 通知content script设置变更
+    chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+      if (tabs[0]) {
+        chrome.tabs.sendMessage(tabs[0].id, {
+          action: 'updateSettings',
+          settings: { translationService: service }
+        });
+      }
+    });
+
+    // 显示/隐藏API设置
+    updateApiSettingsVisibility(service);
+  });
+
+  // 绑定硅基流动API设置事件
+  testSiliconFlowApiKeyBtn.addEventListener('click', testSiliconFlowApiKey);
+  saveSiliconFlowApiKeyBtn.addEventListener('click', saveSiliconFlowApiKey);
+
+  // 绑定OpenAI API设置事件
+  openaiProviderSelect.addEventListener('change', handleProviderChange);
+  testOpenAIConfigBtn.addEventListener('click', testOpenAIConfig);
+  saveOpenAIConfigBtn.addEventListener('click', saveOpenAIConfig);
 
   // 绑定标签页事件
   tabBtns.forEach(btn => {
@@ -48,12 +91,30 @@ document.addEventListener('DOMContentLoaded', function() {
   });
   
   function loadSettings() {
-    chrome.storage.sync.get(['enabled', 'autoSpeak'], function(result) {
+    chrome.storage.sync.get([
+      'enabled', 'autoSpeak', 'translationService', 
+      'siliconFlowApiKey', 'openaiApiKey', 'openaiBaseUrl', 'openaiModel'
+    ], function(result) {
       const enabled = result.enabled !== false; // 默认启用
       const autoSpeak = result.autoSpeak === true; // 默认关闭
+      const translationService = result.translationService || 'google';
+      const siliconFlowApiKey = result.siliconFlowApiKey || '';
+      const openaiApiKey = result.openaiApiKey || '';
+      const openaiBaseUrl = result.openaiBaseUrl || 'https://api.openai.com/v1/chat/completions';
+      const openaiModel = result.openaiModel || 'gpt-3.5-turbo';
       
       updateToggleState(enableToggle, enabled);
       updateToggleState(autoSpeakToggle, autoSpeak);
+      translationServiceSelect.value = translationService;
+      siliconFlowApiKeyInput.value = siliconFlowApiKey;
+      openaiApiKeyInput.value = openaiApiKey;
+      openaiBaseUrlInput.value = openaiBaseUrl;
+      openaiModelInput.value = openaiModel;
+      
+      // 根据baseUrl设置provider
+      setProviderFromUrl(openaiBaseUrl);
+      
+      updateApiSettingsVisibility(translationService);
     });
   }
   
@@ -417,4 +478,269 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     }, 4000);
   }
+
+  // 更新API设置可见性
+  function updateApiSettingsVisibility(service) {
+    const siliconflowSettings = document.getElementById('siliconflowSettings');
+    const openaiSettings = document.getElementById('openaiSettings');
+    
+    siliconflowSettings.style.display = service === 'siliconflow' ? 'block' : 'none';
+    openaiSettings.style.display = service === 'openai' ? 'block' : 'none';
+  }
+
+  // 测试硅基流动API密钥
+  async function testSiliconFlowApiKey() {
+    const apiKey = siliconFlowApiKeyInput.value.trim();
+    
+    if (!apiKey) {
+      showSiliconFlowApiStatus('请输入API密钥', 'error');
+      return;
+    }
+
+    showSiliconFlowApiStatus('正在测试连接...', 'testing');
+    testSiliconFlowApiKeyBtn.disabled = true;
+
+    try {
+      // 创建临时的翻译器实例进行测试
+      const translator = new SiliconFlowTranslator();
+      const validation = await translator.validateApiKey(apiKey);
+      
+      if (validation.valid) {
+        showSiliconFlowApiStatus('API密钥有效，连接成功！', 'success');
+      } else {
+        showSiliconFlowApiStatus(`API密钥无效: ${validation.error}`, 'error');
+      }
+    } catch (error) {
+      showSiliconFlowApiStatus(`测试失败: ${error.message}`, 'error');
+    } finally {
+      testSiliconFlowApiKeyBtn.disabled = false;
+    }
+  }
+
+  // 保存硅基流动API密钥
+  async function saveSiliconFlowApiKey() {
+    const apiKey = siliconFlowApiKeyInput.value.trim();
+    
+    if (!apiKey) {
+      showSiliconFlowApiStatus('请输入API密钥', 'error');
+      return;
+    }
+
+    try {
+      await chrome.storage.sync.set({ siliconFlowApiKey: apiKey });
+      showSiliconFlowApiStatus('API密钥已保存', 'success');
+      
+      // 通知content script更新API密钥
+      chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+        if (tabs[0]) {
+          chrome.tabs.sendMessage(tabs[0].id, {
+            action: 'updateSiliconFlowApiKey',
+            apiKey: apiKey
+          });
+        }
+      });
+    } catch (error) {
+      showSiliconFlowApiStatus(`保存失败: ${error.message}`, 'error');
+    }
+  }
+
+  // 显示硅基流动API状态消息
+  function showSiliconFlowApiStatus(message, type) {
+    siliconFlowApiStatusDiv.textContent = message;
+    siliconFlowApiStatusDiv.className = `api-status ${type}`;
+    siliconFlowApiStatusDiv.style.display = 'block';
+    
+    // 3秒后隐藏状态消息（除非是错误）
+    if (type !== 'error') {
+      setTimeout(() => {
+        siliconFlowApiStatusDiv.style.display = 'none';
+      }, 3000);
+    }
+  }
+
+  // 显示OpenAI API状态消息
+  function showOpenAIApiStatus(message, type) {
+    openaiApiStatusDiv.textContent = message;
+    openaiApiStatusDiv.className = `api-status ${type}`;
+    openaiApiStatusDiv.style.display = 'block';
+    
+    // 3秒后隐藏状态消息（除非是错误）
+    if (type !== 'error') {
+      setTimeout(() => {
+        openaiApiStatusDiv.style.display = 'none';
+      }, 3000);
+    }
+  }
+
+  // 动态加载SiliconFlowTranslator类
+  function loadSiliconFlowTranslator() {
+    return new Promise((resolve, reject) => {
+      if (window.SiliconFlowTranslator) {
+        resolve();
+        return;
+      }
+
+      const script = document.createElement('script');
+      script.src = chrome.runtime.getURL('siliconflow-translator.js');
+      script.onload = () => resolve();
+      script.onerror = () => reject(new Error('无法加载SiliconFlowTranslator模块'));
+      document.head.appendChild(script);
+    });
+  }
+
+  // 处理服务提供商选择变化
+  function handleProviderChange() {
+    const provider = openaiProviderSelect.value;
+    const providers = {
+      'openai': {
+        baseUrl: 'https://api.openai.com/v1/chat/completions',
+        model: 'gpt-3.5-turbo'
+      },
+      'deepseek': {
+        baseUrl: 'https://api.deepseek.com/v1/chat/completions',
+        model: 'deepseek-chat'
+      },
+      'moonshot': {
+        baseUrl: 'https://api.moonshot.cn/v1/chat/completions',
+        model: 'moonshot-v1-8k'
+      },
+      'zhipu': {
+        baseUrl: 'https://open.bigmodel.cn/api/paas/v4/chat/completions',
+        model: 'glm-4'
+      }
+    };
+
+    if (providers[provider]) {
+      openaiBaseUrlInput.value = providers[provider].baseUrl;
+      openaiModelInput.value = providers[provider].model;
+    }
+  }
+
+  // 根据URL设置提供商
+  function setProviderFromUrl(url) {
+    if (url.includes('api.openai.com')) {
+      openaiProviderSelect.value = 'openai';
+    } else if (url.includes('api.deepseek.com')) {
+      openaiProviderSelect.value = 'deepseek';
+    } else if (url.includes('api.moonshot.cn')) {
+      openaiProviderSelect.value = 'moonshot';
+    } else if (url.includes('open.bigmodel.cn')) {
+      openaiProviderSelect.value = 'zhipu';
+    } else {
+      openaiProviderSelect.value = 'custom';
+    }
+  }
+
+  // 测试OpenAI配置
+  async function testOpenAIConfig() {
+    const config = {
+      apiKey: openaiApiKeyInput.value.trim(),
+      baseUrl: openaiBaseUrlInput.value.trim(),
+      model: openaiModelInput.value.trim()
+    };
+    
+    if (!config.apiKey) {
+      showOpenAIApiStatus('请输入API密钥', 'error');
+      return;
+    }
+
+    if (!config.baseUrl) {
+      showOpenAIApiStatus('请输入API地址', 'error');
+      return;
+    }
+
+    if (!config.model) {
+      showOpenAIApiStatus('请输入模型名称', 'error');
+      return;
+    }
+
+    showOpenAIApiStatus('正在测试连接...', 'testing');
+    testOpenAIConfigBtn.disabled = true;
+
+    try {
+      // 创建临时的翻译器实例进行测试
+      const translator = new OpenAITranslator();
+      const validation = await translator.validateConfig(config);
+      
+      if (validation.valid) {
+        showOpenAIApiStatus('配置有效，连接成功！', 'success');
+      } else {
+        showOpenAIApiStatus(`配置无效: ${validation.error}`, 'error');
+      }
+    } catch (error) {
+      showOpenAIApiStatus(`测试失败: ${error.message}`, 'error');
+    } finally {
+      testOpenAIConfigBtn.disabled = false;
+    }
+  }
+
+  // 保存OpenAI配置
+  async function saveOpenAIConfig() {
+    const config = {
+      apiKey: openaiApiKeyInput.value.trim(),
+      baseUrl: openaiBaseUrlInput.value.trim(),
+      model: openaiModelInput.value.trim()
+    };
+    
+    if (!config.apiKey) {
+      showOpenAIApiStatus('请输入API密钥', 'error');
+      return;
+    }
+
+    if (!config.baseUrl) {
+      showOpenAIApiStatus('请输入API地址', 'error');
+      return;
+    }
+
+    if (!config.model) {
+      showOpenAIApiStatus('请输入模型名称', 'error');
+      return;
+    }
+
+    try {
+      await chrome.storage.sync.set({
+        openaiApiKey: config.apiKey,
+        openaiBaseUrl: config.baseUrl,
+        openaiModel: config.model
+      });
+      showOpenAIApiStatus('配置已保存', 'success');
+      
+      // 通知content script更新配置
+      chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+        if (tabs[0]) {
+          chrome.tabs.sendMessage(tabs[0].id, {
+            action: 'updateOpenAIConfig',
+            config: config
+          });
+        }
+      });
+    } catch (error) {
+      showOpenAIApiStatus(`保存失败: ${error.message}`, 'error');
+    }
+  }
+
+  // 在页面加载时加载翻译器
+  Promise.all([
+    loadSiliconFlowTranslator(),
+    loadOpenAITranslator()
+  ]).catch(console.error);
+
+  // 动态加载OpenAITranslator类
+  function loadOpenAITranslator() {
+    return new Promise((resolve, reject) => {
+      if (window.OpenAITranslator) {
+        resolve();
+        return;
+      }
+
+      const script = document.createElement('script');
+      script.src = chrome.runtime.getURL('openai-translator.js');
+      script.onload = () => resolve();
+      script.onerror = () => reject(new Error('无法加载OpenAITranslator模块'));
+      document.head.appendChild(script);
+    });
+  }
+
+  // 在页面加载时加载SiliconFlowTranslator
+  loadSiliconFlowTranslator().catch(console.error);
 });

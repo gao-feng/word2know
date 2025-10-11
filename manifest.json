@@ -11,6 +11,12 @@
     "host_permissions": [
         "https://translate.googleapis.com/*",
         "https://translate.google.com/*",
+        "https://api.siliconflow.cn/*",
+        "https://api.openai.com/*",
+        "https://*.openai.azure.com/*",
+        "https://api.deepseek.com/*",
+        "https://api.moonshot.cn/*",
+        "https://open.bigmodel.cn/*",
         "http://localhost:8765/*"
     ],
     "content_scripts": [
@@ -19,6 +25,8 @@
                 "<all_urls>"
             ],
             "js": [
+                "siliconflow-translator.js",
+                "openai-translator.js",
                 "content.js"
             ],
             "css": [
@@ -32,7 +40,7 @@
     },
     "web_accessible_resources": [
         {
-            "resources": ["anki-connect.js"],
+            "resources": ["anki-connect.js", "siliconflow-translator.js", "openai-translator.js"],
             "matches": ["<all_urls>"]
         }
     ]

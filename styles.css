@@ -176,6 +176,58 @@
   font-weight: 500;
 }
 
+.definitions {
+  margin-top: 8px;
+}
+
+.definitions strong {
+  color: #333;
+  font-size: 13px;
+}
+
+.definitions ul {
+  margin: 4px 0 0 0;
+  padding-left: 16px;
+}
+
+.definitions li {
+  margin-bottom: 4px;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.part-of-speech {
+  color: #1976d2;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.example {
+  color: #666;
+  font-size: 12px;
+  font-style: italic;
+  margin-top: 2px;
+  display: block;
+}
+
+.synonyms, .phrases {
+  margin-top: 6px;
+  font-size: 12px;
+}
+
+.synonyms strong, .phrases strong {
+  color: #333;
+  font-size: 12px;
+}
+
+.translation-source {
+  font-size: 10px;
+  color: #999;
+  text-align: right;
+  margin-top: 4px;
+  font-style: italic;
+}
+
 /* 防止与网页样式冲突 */
 .word-translator-tooltip * {
   box-sizing: border-box;

@@ -271,6 +271,38 @@
     .vocab-item.unsynced .sync-status {
       color: #ff9800;
     }
+
+    .setting-section {
+      margin-top: 16px;
+      padding: 12px;
+      background: #f9f9f9;
+      border-radius: 6px;
+    }
+
+    .setting-section-title {
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 12px;
+      font-size: 14px;
+    }
+
+    .api-status.success {
+      background: #e8f5e8;
+      color: #2e7d32;
+      border: 1px solid #c8e6c9;
+    }
+
+    .api-status.error {
+      background: #ffebee;
+      color: #c62828;
+      border: 1px solid #ffcdd2;
+    }
+
+    .api-status.testing {
+      background: #e3f2fd;
+      color: #1565c0;
+      border: 1px solid #bbdefb;
+    }
   </style>
 </head>
 <body>
@@ -294,6 +326,96 @@
       <div class="setting-item">
         <span class="setting-label">自动发音</span>
         <div class="toggle" id="autoSpeakToggle"></div>
+      </div>
+
+      <div class="setting-item">
+        <span class="setting-label">翻译服务</span>
+        <select id="translationService" style="padding: 4px 8px; border: 1px solid #ccc; border-radius: 4px;">
+          <option value="google">Google翻译</option>
+          <option value="siliconflow">硅基流动</option>
+          <option value="openai">OpenAI兼容</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="api-settings" id="siliconflowSettings" style="display: none;">
+      <div class="setting-section">
+        <div class="setting-section-title">硅基流动API设置</div>
+        <div class="setting-item">
+          <input type="password" id="siliconFlowApiKey" placeholder="请输入硅基流动API密钥" 
+                 style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px;">
+        </div>
+        <div class="setting-item">
+          <button id="testSiliconFlowApiKey" style="padding: 6px 12px; background: #1976d2; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">
+            测试连接
+          </button>
+          <button id="saveSiliconFlowApiKey" style="padding: 6px 12px; background: #4caf50; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; margin-left: 8px;">
+            保存
+          </button>
+        </div>
+        <div class="api-status" id="siliconFlowApiStatus" style="font-size: 12px; margin-top: 8px; padding: 6px; border-radius: 4px; display: none;"></div>
+        <div class="api-help" style="font-size: 12px; color: #666; margin-top: 8px; line-height: 1.4;">
+          <strong>获取API密钥：</strong><br>
+          1. 访问 <a href="https://siliconflow.cn" target="_blank" style="color: #1976d2;">siliconflow.cn</a><br>
+          2. 注册并登录账户<br>
+          3. 在控制台获取API密钥<br>
+          4. 将密钥粘贴到上方输入框
+        </div>
+      </div>
+    </div>
+
+    <div class="api-settings" id="openaiSettings" style="display: none;">
+      <div class="setting-section">
+        <div class="setting-section-title">OpenAI兼容API设置</div>
+        
+        <div class="setting-item">
+          <label style="display: block; margin-bottom: 4px; font-size: 12px; color: #666;">服务提供商</label>
+          <select id="openaiProvider" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px;">
+            <option value="custom">自定义</option>
+            <option value="openai">OpenAI</option>
+            <option value="deepseek">Deepseek</option>
+            <option value="moonshot">Moonshot</option>
+            <option value="zhipu">智谱AI</option>
+          </select>
+        </div>
+
+        <div class="setting-item">
+          <label style="display: block; margin-bottom: 4px; font-size: 12px; color: #666;">API地址</label>
+          <input type="text" id="openaiBaseUrl" placeholder="https://api.openai.com/v1/chat/completions" 
+                 style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px;">
+        </div>
+
+        <div class="setting-item">
+          <label style="display: block; margin-bottom: 4px; font-size: 12px; color: #666;">模型名称</label>
+          <input type="text" id="openaiModel" placeholder="gpt-3.5-turbo" 
+                 style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px;">
+        </div>
+
+        <div class="setting-item">
+          <label style="display: block; margin-bottom: 4px; font-size: 12px; color: #666;">API密钥</label>
+          <input type="password" id="openaiApiKey" placeholder="请输入API密钥" 
+                 style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px;">
+        </div>
+
+        <div class="setting-item">
+          <button id="testOpenAIConfig" style="padding: 6px 12px; background: #1976d2; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">
+            测试连接
+          </button>
+          <button id="saveOpenAIConfig" style="padding: 6px 12px; background: #4caf50; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; margin-left: 8px;">
+            保存
+          </button>
+        </div>
+
+        <div class="api-status" id="openaiApiStatus" style="font-size: 12px; margin-top: 8px; padding: 6px; border-radius: 4px; display: none;"></div>
+        
+        <div class="api-help" style="font-size: 12px; color: #666; margin-top: 8px; line-height: 1.4;">
+          <strong>支持的服务：</strong><br>
+          • OpenAI: 官方ChatGPT API<br>
+          • Deepseek: 深度求索AI<br>
+          • Moonshot: 月之暗面Kimi<br>
+          • 智谱AI: GLM系列模型<br>
+          • 其他OpenAI兼容的API服务
+        </div>
       </div>
     </div>
   </div>

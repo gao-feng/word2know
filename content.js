@@ -8,10 +8,13 @@ class WordTranslator {
     this.cache = new Map();
     this.settings = {
       enabled: true,
-      autoSpeak: false
+      autoSpeak: false,
+      translationService: 'google' // 默认使用Google翻译
     };
     this.selectedText = '';
     this.selectionRect = null;
+    this.siliconFlowTranslator = new SiliconFlowTranslator();
+    this.openaiTranslator = new OpenAITranslator();
     this.init();
   }
 
@@ -24,9 +27,10 @@ class WordTranslator {
   }
 
   loadSettings() {
-    chrome.storage.sync.get(['enabled', 'autoSpeak'], (result) => {
+    chrome.storage.sync.get(['enabled', 'autoSpeak', 'translationService'], (result) => {
       this.settings.enabled = result.enabled !== false;
       this.settings.autoSpeak = result.autoSpeak === true;
+      this.settings.translationService = result.translationService || 'google';
     });
   }
 
@@ -34,6 +38,10 @@ class WordTranslator {
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       if (message.action === 'updateSettings') {
         Object.assign(this.settings, message.settings);
+      } else if (message.action === 'updateSiliconFlowApiKey') {
+        this.siliconFlowTranslator.setApiKey(message.apiKey);
+      } else if (message.action === 'updateOpenAIConfig') {
+        this.openaiTranslator.setConfig(message.config);
       }
     });
   }
@@ -216,7 +224,57 @@ class WordTranslator {
   }
 
   async fetchTranslation(word) {
-    // 使用Google翻译API的简化版本
+    switch (this.settings.translationService) {
+      case 'siliconflow':
+        return await this.fetchSiliconFlowTranslation(word);
+      case 'openai':
+        return await this.fetchOpenAITranslation(word);
+      case 'google':
+      default:
+        return await this.fetchGoogleTranslation(word);
+    }
+  }
+
+  async fetchSiliconFlowTranslation(word) {
+    try {
+      const result = await this.siliconFlowTranslator.translate(word, 'zh');
+      return {
+        word: result.word,
+        translation: result.translation,
+        pronunciation: result.pronunciation,
+        definitions: result.definitions,
+        synonyms: result.synonyms,
+        phrases: result.phrases,
+        source: 'SiliconFlow'
+      };
+    } catch (error) {
+      console.error('硅基流动翻译失败:', error);
+      // 如果硅基流动失败，回退到Google翻译
+      return await this.fetchGoogleTranslation(word);
+    }
+  }
+
+  async fetchOpenAITranslation(word) {
+    try {
+      const result = await this.openaiTranslator.translate(word, 'zh');
+      return {
+        word: result.word,
+        translation: result.translation,
+        pronunciation: result.pronunciation,
+        definitions: result.definitions,
+        synonyms: result.synonyms,
+        phrases: result.phrases,
+        source: 'OpenAI'
+      };
+    } catch (error) {
+      console.error('OpenAI翻译失败:', error);
+      // 如果OpenAI失败，回退到Google翻译
+      return await this.fetchGoogleTranslation(word);
+    }
+  }
+
+  async fetchGoogleTranslation(word) {
+    // 使用Google翻译API的简化版本（备用方案）
     const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=zh&dt=t&dt=bd&dj=1&q=${encodeURIComponent(word)}`;
 
     const response = await fetch(url);
@@ -240,12 +298,13 @@ class WordTranslator {
     return {
       word,
       translation: translation || '未找到翻译',
-      pronunciation
+      pronunciation,
+      source: 'Google'
     };
   }
 
   displayTranslation(data) {
-    const html = `
+    let html = `
       <div class="translation-content">
         <div class="word-header">
           <span class="word">${data.word}</span>
@@ -255,9 +314,49 @@ class WordTranslator {
         </div>
         <div class="pronunciation">${data.pronunciation}</div>
         <div class="translation">${data.translation}</div>
-        <div class="tooltip-hint">点击外部区域关闭</div>
-      </div>
     `;
+
+    // 如果有详细定义（硅基流动返回的数据）
+    if (data.definitions && data.definitions.length > 0) {
+      html += `<div class="definitions">
+        <strong>详细释义：</strong>
+        <ul>`;
+
+      data.definitions.slice(0, 3).forEach(def => {
+        html += `<li>`;
+        if (def.partOfSpeech) {
+          html += `<em class="part-of-speech">${def.partOfSpeech}</em> `;
+        }
+        html += `${def.meaning}`;
+        if (def.example) {
+          html += `<br><span class="example">例：${def.example}</span>`;
+        }
+        html += `</li>`;
+      });
+
+      html += `</ul></div>`;
+    }
+
+    // 如果有同义词
+    if (data.synonyms && data.synonyms.length > 0) {
+      html += `<div class="synonyms">
+        <strong>同义词：</strong>${data.synonyms.slice(0, 3).join(', ')}
+      </div>`;
+    }
+
+    // 如果有常用短语
+    if (data.phrases && data.phrases.length > 0) {
+      html += `<div class="phrases">
+        <strong>常用短语：</strong>${data.phrases.slice(0, 3).join(', ')}
+      </div>`;
+    }
+
+    // 显示翻译来源
+    if (data.source) {
+      html += `<div class="translation-source">来源：${data.source}</div>`;
+    }
+
+    html += `<div class="tooltip-hint">点击外部区域关闭</div></div>`;
 
     this.tooltip.innerHTML = html;
 
