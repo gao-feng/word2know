@@ -1,0 +1,396 @@
+// Anki Connect 集成模块
+class AnkiConnect {
+  constructor() {
+    this.baseUrl = 'http://localhost:8765';
+    this.version = 6;
+  }
+
+  // 检查Anki Connect是否可用
+  async checkConnection() {
+    try {
+      const response = await this.invoke('version');
+      return response !== null;
+    } catch (error) {
+      console.error('Anki Connect连接失败:', error);
+      return false;
+    }
+  }
+
+  // 调用Anki Connect API
+  async invoke(action, params = {}) {
+    const requestBody = {
+      action: action,
+      version: this.version,
+      params: params
+    };
+
+    try {
+      const response = await fetch(this.baseUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody)
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      
+      if (data.error) {
+        throw new Error(data.error);
+      }
+
+      return data.result;
+    } catch (error) {
+      console.error('Anki Connect请求失败:', error);
+      throw error;
+    }
+  }
+
+  // 获取所有牌组名称
+  async getDeckNames() {
+    return await this.invoke('deckNames');
+  }
+
+  // 创建牌组
+  async createDeck(deckName) {
+    return await this.invoke('createDeck', { deck: deckName });
+  }
+
+  // 确保牌组存在（如果不存在则创建）
+  async ensureDeckExists(deckName) {
+    const deckNames = await this.getDeckNames();
+    if (!deckNames.includes(deckName)) {
+      console.log(`牌组 "${deckName}" 不存在，正在创建...`);
+      await this.createDeck(deckName);
+      return true; // 返回true表示创建了新牌组
+    }
+    return false; // 返回false表示牌组已存在
+  }
+
+  // 添加笔记到Anki（带音频和详细信息，智能处理重复）
+  async addNote(wordData, deckName = '英语生词') {
+    try {
+      // 先检查是否已存在
+      const exists = await this.wordExists(wordData.word, deckName);
+      if (exists) {
+        console.log(`单词 "${wordData.word}" 已存在于Anki中，跳过添加`);
+        return null; // 返回null表示跳过
+      }
+
+      // 获取发音音频
+      const audioData = await this.getAudioData(wordData.word);
+      
+      // 格式化背面内容
+      let backContent = '';
+      if (wordData.wordDetails) {
+        // 使用详细词典信息
+        const dictionaryService = new (await this.loadDictionaryService())();
+        backContent = dictionaryService.formatForAnki(wordData.wordDetails, wordData.translation);
+      } else {
+        // 使用基本信息
+        backContent = `<div><strong>中文：</strong>${wordData.translation}</div><br>
+                      <div><strong>发音：</strong>${wordData.pronunciation}</div>`;
+      }
+      
+      // 添加音频
+      if (audioData) {
+        backContent += `<br>🔊 [sound:${audioData.filename}]`;
+      }
+      
+      const note = {
+        deckName: deckName,
+        modelName: 'Basic',
+        fields: {
+          Front: wordData.word,
+          Back: backContent
+        },
+        tags: ['vocabulary', 'english', 'browser-extension']
+      };
+
+      // 如果有音频数据，先存储音频文件
+      if (audioData) {
+        await this.storeMediaFile(audioData.filename, audioData.data);
+      }
+
+      const noteId = await this.invoke('addNote', { note });
+      return noteId;
+    } catch (error) {
+      // 处理各种错误情况
+      if (error.message.includes('deck was not found')) {
+        // 牌组不存在，尝试创建
+        await this.createDeck(deckName);
+        return await this.addNote(wordData, deckName);
+      } else if (error.message.includes('duplicate') || 
+                 error.message.includes('重复') ||
+                 error.message.includes('cannot create note because it is a duplicate')) {
+        // 重复卡片，返回null表示跳过
+        console.log(`单词 "${wordData.word}" 重复，跳过添加`);
+        return null;
+      } else {
+        // 其他错误，重新抛出
+        console.error(`添加单词 "${wordData.word}" 到Anki失败:`, error.message);
+        throw error;
+      }
+    }
+  }
+
+  // 批量添加笔记（带音频和详细信息，智能处理重复）
+  async addNotes(words, deckName = '英语生词', progressCallback = null) {
+    try {
+      // 确保牌组存在
+      const deckNames = await this.getDeckNames();
+      if (!deckNames.includes(deckName)) {
+        await this.createDeck(deckName);
+      }
+
+      const results = [];
+      const skippedWords = [];
+      
+      for (let i = 0; i < words.length; i++) {
+        const item = words[i];
+        
+        // 更新进度
+        if (progressCallback) {
+          progressCallback(i + 1);
+        }
+        
+        try {
+          // 检查是否已存在
+          const exists = await this.wordExists(item.word, deckName);
+          if (exists) {
+            console.log(`单词 "${item.word}" 已存在于Anki中，跳过`);
+            skippedWords.push(item.word);
+            results.push(null); // 标记为跳过
+            continue;
+          }
+
+          const audioData = await this.getAudioData(item.word);
+          
+          // 格式化背面内容
+          let backContent = '';
+          if (item.wordDetails) {
+            // 使用详细词典信息
+            const dictionaryService = new (await this.loadDictionaryService())();
+            backContent = dictionaryService.formatForAnki(item.wordDetails, item.translation);
+          } else {
+            // 使用基本信息
+            backContent = `<div><strong>中文：</strong>${item.translation}</div><br>
+                          <div><strong>发音：</strong>${item.pronunciation}</div>`;
+          }
+          
+          // 添加音频
+          if (audioData) {
+            backContent += `<br>🔊 [sound:${audioData.filename}]`;
+          }
+          
+          const note = {
+            deckName: deckName,
+            modelName: 'Basic',
+            fields: {
+              Front: item.word,
+              Back: backContent
+            },
+            tags: ['vocabulary', 'english', 'browser-extension']
+          };
+
+          // 如果有音频数据，先存储音频文件
+          if (audioData) {
+            await this.storeMediaFile(audioData.filename, audioData.data);
+          }
+
+          // 添加单个笔记
+          const noteId = await this.invoke('addNote', { note });
+          results.push(noteId);
+          console.log(`成功添加单词 "${item.word}" 到Anki`);
+
+        } catch (error) {
+          console.error(`添加单词 "${item.word}" 失败:`, error.message);
+          
+          // 如果是重复错误，标记为跳过
+          if (error.message.includes('duplicate') || error.message.includes('重复')) {
+            skippedWords.push(item.word);
+            results.push(null);
+          } else {
+            // 其他错误，重新抛出
+            throw error;
+          }
+        }
+      }
+
+      // 如果有跳过的单词，在控制台记录
+      if (skippedWords.length > 0) {
+        console.log(`跳过已存在的单词: ${skippedWords.join(', ')}`);
+      }
+
+      return results;
+    } catch (error) {
+      console.error('批量添加笔记失败:', error);
+      throw error;
+    }
+  }
+
+  // 检查笔记是否已存在
+  async findNotes(query) {
+    return await this.invoke('findNotes', { query });
+  }
+
+  // 根据单词查找是否已存在（支持模糊匹配）
+  async wordExists(word, deckName = '英语生词') {
+    try {
+      // 精确匹配
+      const exactQuery = `deck:"${deckName}" Front:"${word}"`;
+      const exactNoteIds = await this.findNotes(exactQuery);
+      
+      if (exactNoteIds.length > 0) {
+        return true;
+      }
+
+      // 模糊匹配（处理大小写和空格差异）
+      const fuzzyQuery = `deck:"${deckName}" Front:*${word.toLowerCase()}*`;
+      const fuzzyNoteIds = await this.findNotes(fuzzyQuery);
+      
+      if (fuzzyNoteIds.length > 0) {
+        // 获取笔记信息进行更精确的比较
+        const notesInfo = await this.invoke('notesInfo', { notes: fuzzyNoteIds });
+        
+        for (const noteInfo of notesInfo) {
+          const frontField = noteInfo.fields.Front?.value || '';
+          if (frontField.toLowerCase().trim() === word.toLowerCase().trim()) {
+            return true;
+          }
+        }
+      }
+
+      return false;
+    } catch (error) {
+      console.warn(`检查单词 "${word}" 是否存在时出错:`, error.message);
+      // 如果检查失败，假设不存在（避免阻止同步）
+      return false;
+    }
+  }
+
+  // 获取笔记信息
+  async getNotesInfo(noteIds) {
+    return await this.invoke('notesInfo', { notes: noteIds });
+  }
+
+  // 获取单词发音音频数据
+  async getAudioData(word) {
+    // 清理单词，只保留字母和基本符号
+    const cleanWord = word.trim().toLowerCase();
+    if (!cleanWord || cleanWord.length > 50) {
+      return null;
+    }
+
+    const ttsServices = [
+      // Google TTS (主要)
+      {
+        name: 'Google TTS',
+        url: `https://translate.google.com/translate_tts?ie=UTF-8&tl=en&client=tw-ob&q=${encodeURIComponent(cleanWord)}`,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          'Referer': 'https://translate.google.com/'
+        }
+      },
+      // Google TTS (备用)
+      {
+        name: 'Google TTS Alt',
+        url: `https://translate.google.com/translate_tts?ie=UTF-8&tl=en&client=gtx&q=${encodeURIComponent(cleanWord)}`,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }
+      }
+    ];
+
+    for (const service of ttsServices) {
+      try {
+        console.log(`尝试从 ${service.name} 获取 "${cleanWord}" 的发音...`);
+        
+        const response = await fetch(service.url, {
+          headers: service.headers,
+          method: 'GET'
+        });
+
+        if (response.ok && response.headers.get('content-type')?.includes('audio')) {
+          const audioBlob = await response.blob();
+          
+          // 检查音频文件大小（太小可能是错误响应）
+          if (audioBlob.size < 100) {
+            console.warn(`${service.name} 返回的音频文件太小，跳过`);
+            continue;
+          }
+          
+          const audioBuffer = await audioBlob.arrayBuffer();
+          const base64Audio = this.arrayBufferToBase64(audioBuffer);
+          
+          // 生成唯一的文件名
+          const filename = `tts_${cleanWord.replace(/[^a-zA-Z0-9]/g, '_')}_${Date.now()}.mp3`;
+          
+          console.log(`成功从 ${service.name} 获取 "${cleanWord}" 的发音`);
+          
+          return {
+            filename: filename,
+            data: base64Audio
+          };
+        } else {
+          console.warn(`${service.name} 响应异常:`, response.status, response.statusText);
+        }
+      } catch (error) {
+        console.warn(`${service.name} 获取发音失败:`, error.message);
+      }
+    }
+
+    console.warn(`所有TTS服务都无法获取 "${cleanWord}" 的发音`);
+    return null;
+  }
+
+  // 存储媒体文件到Anki
+  async storeMediaFile(filename, base64Data) {
+    return await this.invoke('storeMediaFile', {
+      filename: filename,
+      data: base64Data
+    });
+  }
+
+  // 将ArrayBuffer转换为Base64
+  arrayBufferToBase64(buffer) {
+    let binary = '';
+    const bytes = new Uint8Array(buffer);
+    const len = bytes.byteLength;
+    for (let i = 0; i < len; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    return btoa(binary);
+  }
+
+  // 加载词典服务
+  async loadDictionaryService() {
+    return new Promise((resolve, reject) => {
+      if (window.DictionaryService) {
+        resolve(window.DictionaryService);
+        return;
+      }
+
+      const script = document.createElement('script');
+      script.src = chrome.runtime.getURL('dictionary-service.js');
+      script.onload = () => {
+        resolve(window.DictionaryService);
+      };
+      script.onerror = () => {
+        reject(new Error('无法加载词典服务模块'));
+      };
+      document.head.appendChild(script);
+    });
+  }
+}
+
+// 导出AnkiConnect类
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = AnkiConnect;
+} else {
+  window.AnkiConnect = AnkiConnect;
+}

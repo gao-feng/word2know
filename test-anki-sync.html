@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Anki同步测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .test-step {
+            margin: 10px 0;
+            padding: 10px;
+            background-color: #f9f9f9;
+            border-left: 4px solid #2196f3;
+        }
+        .success { border-left-color: #4caf50; background-color: #f1f8e9; }
+        .warning { border-left-color: #ff9800; background-color: #fff3e0; }
+        .error { border-left-color: #f44336; background-color: #ffebee; }
+        code {
+            background-color: #f5f5f5;
+            padding: 2px 4px;
+            border-radius: 3px;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <h1>Anki同步重复卡片修复测试</h1>
+    
+    <div class="test-section">
+        <h2>问题背景</h2>
+        <p>之前同步Anki时会出现 <code>'cannot create note because it is a duplicate'</code> 错误，现在已经修复。</p>
+    </div>
+
+    <div class="test-section">
+        <h2>测试步骤</h2>
+        
+        <div class="test-step">
+            <h3>步骤1：准备测试环境</h3>
+            <ul>
+                <li>确保Anki已启动</li>
+                <li>确保AnkiConnect插件已安装并启用</li>
+                <li>在浏览器中打开插件</li>
+            </ul>
+        </div>
+
+        <div class="test-step">
+            <h3>步骤2：基本同步测试</h3>
+            <ul>
+                <li>添加几个新单词到生词表（如：apple, banana, orange）</li>
+                <li>点击"同步到Anki"按钮</li>
+                <li>应该显示：<code>成功同步 X 个生词到Anki</code></li>
+            </ul>
+        </div>
+
+        <div class="test-step warning">
+            <h3>步骤3：重复同步测试</h3>
+            <ul>
+                <li>再次点击"同步到Anki"按钮</li>
+                <li>应该显示：<code>X 个生词已存在于Anki中</code></li>
+                <li>不应该出现重复错误</li>
+            </ul>
+        </div>
+
+        <div class="test-step">
+            <h3>步骤4：混合情况测试</h3>
+            <ul>
+                <li>在Anki中手动添加单词"hello"</li>
+                <li>在插件中添加"hello"和"world"到生词表</li>
+                <li>点击同步</li>
+                <li>应该显示：<code>同步完成：新增 1 个，跳过 1 个已存在的生词</code></li>
+            </ul>
+        </div>
+
+        <div class="test-step success">
+            <h3>步骤5：大小写测试</h3>
+            <ul>
+                <li>在Anki中添加"Hello"（大写H）</li>
+                <li>在插件中添加"hello"（小写h）</li>
+                <li>同步时应该识别为重复并跳过</li>
+            </ul>
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h2>预期结果</h2>
+        
+        <div class="test-step success">
+            <h3>✅ 成功情况</h3>
+            <ul>
+                <li>新单词成功添加到Anki</li>
+                <li>重复单词被智能跳过</li>
+                <li>显示详细的同步结果</li>
+                <li>不出现重复错误</li>
+            </ul>
+        </div>
+
+        <div class="test-step error">
+            <h3>❌ 如果仍有问题</h3>
+            <ul>
+                <li>检查Anki是否正常运行</li>
+                <li>检查AnkiConnect插件版本</li>
+                <li>查看浏览器控制台错误信息</li>
+                <li>确认牌组名称是否正确</li>
+            </ul>
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h2>修复内容总结</h2>
+        <ul>
+            <li><strong>智能重复检测</strong>：同步前检查Anki中是否已存在相同单词</li>
+            <li><strong>错误处理优化</strong>：捕获并优雅处理重复卡片错误</li>
+            <li><strong>状态管理改进</strong>：正确标记跳过的单词为已同步</li>
+            <li><strong>用户反馈增强</strong>：显示详细的同步结果统计</li>
+            <li><strong>模糊匹配支持</strong>：处理大小写和格式差异</li>
+        </ul>
+    </div>
+
+    <div class="test-section">
+        <h2>技术细节</h2>
+        <p>修复涉及以下关键改进：</p>
+        <ul>
+            <li><code>wordExists()</code> - 智能检测重复卡片</li>
+            <li><code>addNote()</code> - 预检查 + 错误处理</li>
+            <li><code>addNotes()</code> - 逐个处理，避免批量失败</li>
+            <li>同步状态管理 - 正确处理跳过的单词</li>
+        </ul>
+    </div>
+
+    <script>
+        console.log('Anki重复卡片问题已修复');
+        console.log('测试要点：');
+        console.log('1. 重复同步不应该报错');
+        console.log('2. 已存在的单词应该被跳过');
+        console.log('3. 显示详细的同步结果');
+        console.log('4. 支持大小写差异检测');
+    </script>
+</body>
+</html>
