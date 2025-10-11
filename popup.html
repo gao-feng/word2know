@@ -147,7 +147,12 @@
       color: #666;
     }
 
-    .clear-btn {
+    .vocab-actions-group {
+      display: flex;
+      gap: 8px;
+    }
+
+    .clear-btn, .export-btn {
       padding: 4px 8px;
       border: 1px solid #e0e0e0;
       background: white;
@@ -157,9 +162,19 @@
       color: #666;
     }
 
-    .clear-btn:hover {
+    .clear-btn:hover, .export-btn:hover {
       background: #f5f5f5;
       border-color: #ccc;
+    }
+
+    .export-btn {
+      color: #1976d2;
+      border-color: #1976d2;
+    }
+
+    .export-btn:hover {
+      background: #e3f2fd;
+      border-color: #1565c0;
     }
 
     .vocabulary-list {
@@ -250,7 +265,10 @@
       <div class="vocab-stats">
         <span id="vocabCount">0</span> 个生词
       </div>
-      <button class="clear-btn" id="clearVocab">清空</button>
+      <div class="vocab-actions-group">
+        <button class="export-btn" id="exportAnki" title="导出为Anki格式">📤 Anki</button>
+        <button class="clear-btn" id="clearVocab">清空</button>
+      </div>
     </div>
     <div class="vocabulary-list" id="vocabularyList">
       <div class="empty-state">暂无生词</div>
@@ -261,10 +279,10 @@
     <div class="usage">
       <div class="usage-title">使用方法：</div>
       <ul class="usage-list">
-        <li>将鼠标悬浮在英文单词上</li>
-        <li>等待翻译结果显示</li>
-        <li>点击🔊按钮听发音</li>
-        <li>移开鼠标隐藏翻译</li>
+        <li>选中英文单词或短语</li>
+        <li>点击🌐翻译按钮查看翻译</li>
+        <li>点击⭐按钮添加到生词表</li>
+        <li>在生词表中点击📤导出到Anki</li>
       </ul>
     </div>
   </div>

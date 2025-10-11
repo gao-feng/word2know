@@ -6,6 +6,7 @@ document.addEventListener('DOMContentLoaded', function() {
   const settingsTab = document.getElementById('settingsTab');
   const vocabularyTab = document.getElementById('vocabularyTab');
   const clearVocabBtn = document.getElementById('clearVocab');
+  const exportAnkiBtn = document.getElementById('exportAnki');
   
   // 加载设置和生词表
   loadSettings();
@@ -33,6 +34,11 @@ document.addEventListener('DOMContentLoaded', function() {
     if (confirm('确定要清空所有生词吗？')) {
       clearVocabulary();
     }
+  });
+
+  // 绑定导出Anki事件
+  exportAnkiBtn.addEventListener('click', function() {
+    exportToAnki();
   });
   
   function loadSettings() {
@@ -154,4 +160,125 @@ document.addEventListener('DOMContentLoaded', function() {
       });
     });
   };
+
+  function exportToAnki() {
+    chrome.storage.sync.get(['vocabulary'], function(result) {
+      const vocabulary = result.vocabulary || [];
+      
+      if (vocabulary.length === 0) {
+        alert('生词表为空，无法导出');
+        return;
+      }
+
+      // 生成CSV格式的内容
+      const csvContent = generateAnkiCSV(vocabulary);
+      
+      // 创建下载链接
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      
+      if (link.download !== undefined) {
+        const url = URL.createObjectURL(blob);
+        link.setAttribute('href', url);
+        link.setAttribute('download', `vocabulary_${new Date().toISOString().split('T')[0]}.csv`);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        // 显示成功消息
+        showExportMessage(`已导出 ${vocabulary.length} 个单词到CSV文件`);
+      } else {
+        // 如果浏览器不支持下载，显示内容让用户复制
+        showExportContent(csvContent);
+      }
+    });
+  }
+
+  function generateAnkiCSV(vocabulary) {
+    // Anki CSV格式：正面,背面,标签
+    // 正面是英文单词，背面是中文翻译和发音
+    let csv = '';
+    
+    vocabulary.forEach(item => {
+      const front = escapeCSV(item.word);
+      const back = escapeCSV(`${item.translation}<br><br><i>${item.pronunciation}</i>`);
+      const tags = 'vocabulary english'; // 可以自定义标签
+      
+      csv += `"${front}","${back}","${tags}"\n`;
+    });
+    
+    return csv;
+  }
+
+  function escapeCSV(text) {
+    // 转义CSV中的特殊字符
+    return text.replace(/"/g, '""');
+  }
+
+  function showExportMessage(message) {
+    // 创建临时消息提示
+    const messageDiv = document.createElement('div');
+    messageDiv.textContent = message;
+    messageDiv.style.cssText = `
+      position: fixed;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #4caf50;
+      color: white;
+      padding: 8px 16px;
+      border-radius: 4px;
+      font-size: 14px;
+      z-index: 10000;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    `;
+    
+    document.body.appendChild(messageDiv);
+    
+    setTimeout(() => {
+      if (messageDiv.parentNode) {
+        messageDiv.parentNode.removeChild(messageDiv);
+      }
+    }, 3000);
+  }
+
+  function showExportContent(csvContent) {
+    // 如果无法直接下载，显示内容供用户复制
+    const modal = document.createElement('div');
+    modal.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.5);
+      z-index: 10000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    `;
+    
+    const content = document.createElement('div');
+    content.style.cssText = `
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      max-width: 80%;
+      max-height: 80%;
+      overflow: auto;
+    `;
+    
+    content.innerHTML = `
+      <h3>导出内容</h3>
+      <p>请复制以下内容并保存为CSV文件：</p>
+      <textarea readonly style="width: 100%; height: 200px; font-family: monospace;">${csvContent}</textarea>
+      <div style="margin-top: 10px;">
+        <button onclick="this.parentNode.parentNode.parentNode.remove()">关闭</button>
+      </div>
+    `;
+    
+    modal.appendChild(content);
+    document.body.appendChild(modal);
+  }
 });
