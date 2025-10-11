@@ -152,7 +152,7 @@
       gap: 8px;
     }
 
-    .clear-btn, .export-btn {
+    .clear-btn, .export-btn, .sync-btn {
       padding: 4px 8px;
       border: 1px solid #e0e0e0;
       background: white;
@@ -162,7 +162,7 @@
       color: #666;
     }
 
-    .clear-btn:hover, .export-btn:hover {
+    .clear-btn:hover, .export-btn:hover, .sync-btn:hover {
       background: #f5f5f5;
       border-color: #ccc;
     }
@@ -175,6 +175,22 @@
     .export-btn:hover {
       background: #e3f2fd;
       border-color: #1565c0;
+    }
+
+    .sync-btn {
+      color: #4caf50;
+      border-color: #4caf50;
+    }
+
+    .sync-btn:hover {
+      background: #e8f5e8;
+      border-color: #45a049;
+    }
+
+    .sync-btn:disabled {
+      color: #ccc;
+      border-color: #e0e0e0;
+      cursor: not-allowed;
     }
 
     .vocabulary-list {
@@ -233,6 +249,28 @@
       padding: 40px 20px;
       font-size: 14px;
     }
+
+    .vocab-item.synced {
+      border-left: 3px solid #4caf50;
+    }
+
+    .vocab-item.unsynced {
+      border-left: 3px solid #ff9800;
+    }
+
+    .sync-status {
+      font-size: 10px;
+      margin-left: 4px;
+      opacity: 0.7;
+    }
+
+    .vocab-item.synced .sync-status {
+      color: #4caf50;
+    }
+
+    .vocab-item.unsynced .sync-status {
+      color: #ff9800;
+    }
   </style>
 </head>
 <body>
@@ -266,7 +304,8 @@
         <span id="vocabCount">0</span> 个生词
       </div>
       <div class="vocab-actions-group">
-        <button class="export-btn" id="exportAnki" title="导出为Anki格式">📤 Anki</button>
+        <button class="sync-btn" id="syncAnki" title="同步到Anki">🔄 同步</button>
+        <button class="export-btn" id="exportAnki" title="导出为Anki格式">📤 导出</button>
         <button class="clear-btn" id="clearVocab">清空</button>
       </div>
     </div>
@@ -282,7 +321,8 @@
         <li>选中英文单词或短语</li>
         <li>点击🌐翻译按钮查看翻译</li>
         <li>点击⭐按钮添加到生词表</li>
-        <li>在生词表中点击📤导出到Anki</li>
+        <li>点击🔄同步到Anki（含真人发音）</li>
+        <li>或点击📤导出CSV文件手动导入</li>
       </ul>
     </div>
   </div>

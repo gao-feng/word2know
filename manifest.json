@@ -9,7 +9,9 @@
         "downloads"
     ],
     "host_permissions": [
-        "https://translate.googleapis.com/*"
+        "https://translate.googleapis.com/*",
+        "https://translate.google.com/*",
+        "http://localhost:8765/*"
     ],
     "content_scripts": [
         {
@@ -27,5 +29,11 @@
     "action": {
         "default_popup": "popup.html",
         "default_title": "英文悬浮翻译"
-    }
+    },
+    "web_accessible_resources": [
+        {
+            "resources": ["anki-connect.js"],
+            "matches": ["<all_urls>"]
+        }
+    ]
 }

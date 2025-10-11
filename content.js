@@ -322,7 +322,10 @@ class WordTranslator {
         word: data.word,
         translation: data.translation,
         pronunciation: data.pronunciation,
-        addedAt: new Date().toISOString()
+        addedAt: new Date().toISOString(),
+        ankiSynced: false,
+        ankiNoteId: null,
+        syncedAt: null
       };
 
       vocabulary.unshift(newWord); // 添加到开头

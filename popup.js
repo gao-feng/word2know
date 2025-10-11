@@ -7,6 +7,7 @@ document.addEventListener('DOMContentLoaded', function() {
   const vocabularyTab = document.getElementById('vocabularyTab');
   const clearVocabBtn = document.getElementById('clearVocab');
   const exportAnkiBtn = document.getElementById('exportAnki');
+  const syncAnkiBtn = document.getElementById('syncAnki');
   
   // 加载设置和生词表
   loadSettings();
@@ -39,6 +40,11 @@ document.addEventListener('DOMContentLoaded', function() {
   // 绑定导出Anki事件
   exportAnkiBtn.addEventListener('click', function() {
     exportToAnki();
+  });
+
+  // 绑定同步Anki事件
+  syncAnkiBtn.addEventListener('click', function() {
+    syncToAnki();
   });
   
   function loadSettings() {
@@ -112,7 +118,11 @@ document.addEventListener('DOMContentLoaded', function() {
     const vocabularyList = document.getElementById('vocabularyList');
     const vocabCount = document.getElementById('vocabCount');
     
-    vocabCount.textContent = vocabulary.length;
+    // 统计同步状态
+    const syncedCount = vocabulary.filter(item => item.ankiSynced).length;
+    const unsyncedCount = vocabulary.length - syncedCount;
+    
+    vocabCount.innerHTML = `${vocabulary.length} 个生词 ${unsyncedCount > 0 ? `<span style="color: #ff9800;">(${unsyncedCount} 未同步)</span>` : '<span style="color: #4caf50;">(已全部同步)</span>'}`;
 
     if (vocabulary.length === 0) {
       vocabularyList.innerHTML = '<div class="empty-state">暂无生词</div>';
@@ -120,9 +130,12 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     const html = vocabulary.map((item, index) => `
-      <div class="vocab-item">
+      <div class="vocab-item ${item.ankiSynced ? 'synced' : 'unsynced'}">
         <div class="vocab-content">
-          <div class="vocab-word">${item.word}</div>
+          <div class="vocab-word">
+            ${item.word}
+            ${item.ankiSynced ? '<span class="sync-status" title="已同步到Anki">✓</span>' : '<span class="sync-status" title="未同步">○</span>'}
+          </div>
           <div class="vocab-translation">${item.translation}</div>
         </div>
         <div class="vocab-actions">
@@ -280,5 +293,128 @@ document.addEventListener('DOMContentLoaded', function() {
     
     modal.appendChild(content);
     document.body.appendChild(modal);
+  }
+
+  // 同步到Anki功能
+  async function syncToAnki() {
+    const syncBtn = document.getElementById('syncAnki');
+    const originalText = syncBtn.textContent;
+    
+    try {
+      syncBtn.disabled = true;
+      syncBtn.textContent = '🔄 连接中...';
+
+      // 动态加载AnkiConnect
+      const ankiConnect = await loadAnkiConnect();
+      
+      // 检查连接
+      const isConnected = await ankiConnect.checkConnection();
+      if (!isConnected) {
+        throw new Error('无法连接到Anki。请确保Anki已启动并安装了AnkiConnect插件。');
+      }
+
+      // 获取生词表
+      const result = await chrome.storage.sync.get(['vocabulary']);
+      const vocabulary = result.vocabulary || [];
+      
+      // 筛选未同步的单词
+      const unsyncedWords = vocabulary.filter(item => !item.ankiSynced);
+      
+      if (unsyncedWords.length === 0) {
+        showSyncMessage('所有生词已同步到Anki', 'success');
+        return;
+      }
+
+      syncBtn.textContent = `🔄 获取发音 (0/${unsyncedWords.length})`;
+
+      // 批量添加到Anki（包含音频）
+      const noteIds = await ankiConnect.addNotes(unsyncedWords, '英语生词', (progress) => {
+        syncBtn.textContent = `🔄 同步中 (${progress}/${unsyncedWords.length})`;
+      });
+      
+      // 更新同步状态
+      let successCount = 0;
+      for (let i = 0; i < unsyncedWords.length; i++) {
+        if (noteIds[i] !== null) {
+          const wordIndex = vocabulary.findIndex(item => 
+            item.word === unsyncedWords[i].word && !item.ankiSynced
+          );
+          if (wordIndex !== -1) {
+            vocabulary[wordIndex].ankiSynced = true;
+            vocabulary[wordIndex].ankiNoteId = noteIds[i];
+            vocabulary[wordIndex].syncedAt = new Date().toISOString();
+            successCount++;
+          }
+        }
+      }
+
+      // 保存更新后的生词表
+      await chrome.storage.sync.set({ vocabulary });
+      
+      // 刷新显示
+      loadVocabulary();
+      
+      showSyncMessage(`成功同步 ${successCount} 个生词到Anki`, 'success');
+
+    } catch (error) {
+      console.error('同步失败:', error);
+      showSyncMessage(`同步失败: ${error.message}`, 'error');
+    } finally {
+      syncBtn.disabled = false;
+      syncBtn.textContent = originalText;
+    }
+  }
+
+  // 动态加载AnkiConnect
+  async function loadAnkiConnect() {
+    return new Promise((resolve, reject) => {
+      if (window.AnkiConnect) {
+        resolve(new window.AnkiConnect());
+        return;
+      }
+
+      const script = document.createElement('script');
+      script.src = chrome.runtime.getURL('anki-connect.js');
+      script.onload = () => {
+        resolve(new window.AnkiConnect());
+      };
+      script.onerror = () => {
+        reject(new Error('无法加载AnkiConnect模块'));
+      };
+      document.head.appendChild(script);
+    });
+  }
+
+  // 显示同步消息
+  function showSyncMessage(message, type = 'info') {
+    const messageDiv = document.createElement('div');
+    messageDiv.textContent = message;
+    
+    const bgColor = type === 'success' ? '#4caf50' : 
+                   type === 'error' ? '#f44336' : '#2196f3';
+    
+    messageDiv.style.cssText = `
+      position: fixed;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: ${bgColor};
+      color: white;
+      padding: 8px 16px;
+      border-radius: 4px;
+      font-size: 14px;
+      z-index: 10000;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+      max-width: 280px;
+      text-align: center;
+    `;
+    
+    document.body.appendChild(messageDiv);
+    
+    setTimeout(() => {
+      if (messageDiv.parentNode) {
+        messageDiv.parentNode.removeChild(messageDiv);
+      }
+    }, 4000);
   }
 });
