@@ -2,6 +2,7 @@
 document.addEventListener('DOMContentLoaded', function() {
   const enableToggle = document.getElementById('enableToggle');
   const autoSpeakToggle = document.getElementById('autoSpeakToggle');
+  const clipboardToggle = document.getElementById('clipboardToggle');
   const translationServiceSelect = document.getElementById('translationService');
   
   // 硅基流动设置元素
@@ -36,6 +37,10 @@ document.addEventListener('DOMContentLoaded', function() {
   
   autoSpeakToggle.addEventListener('click', function() {
     toggleSetting('autoSpeak', autoSpeakToggle);
+  });
+
+  clipboardToggle.addEventListener('click', function() {
+    toggleSetting('clipboardEnabled', clipboardToggle);
   });
 
   translationServiceSelect.addEventListener('change', function() {
@@ -92,11 +97,12 @@ document.addEventListener('DOMContentLoaded', function() {
   
   function loadSettings() {
     chrome.storage.sync.get([
-      'enabled', 'autoSpeak', 'translationService', 
+      'enabled', 'autoSpeak', 'clipboardEnabled', 'translationService', 
       'siliconFlowApiKey', 'openaiApiKey', 'openaiBaseUrl', 'openaiModel'
     ], function(result) {
       const enabled = result.enabled !== false; // 默认启用
       const autoSpeak = result.autoSpeak === true; // 默认关闭
+      const clipboardEnabled = result.clipboardEnabled !== false; // 默认启用
       const translationService = result.translationService || 'google';
       const siliconFlowApiKey = result.siliconFlowApiKey || '';
       const openaiApiKey = result.openaiApiKey || '';
@@ -105,6 +111,7 @@ document.addEventListener('DOMContentLoaded', function() {
       
       updateToggleState(enableToggle, enabled);
       updateToggleState(autoSpeakToggle, autoSpeak);
+      updateToggleState(clipboardToggle, clipboardEnabled);
       translationServiceSelect.value = translationService;
       siliconFlowApiKeyInput.value = siliconFlowApiKey;
       openaiApiKeyInput.value = openaiApiKey;

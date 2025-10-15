@@ -235,6 +235,34 @@
   padding: 0;
 }
 
+/* 剪切板翻译框特殊样式 */
+.word-translator-tooltip.clipboard-tooltip {
+  border-left: 4px solid #4caf50;
+  animation: slideInFromRight 0.3s ease-out;
+}
+
+.word-translator-tooltip.clipboard-tooltip::before {
+  content: "📋 剪切板翻译";
+  display: block;
+  font-size: 11px;
+  color: #4caf50;
+  font-weight: 600;
+  margin-bottom: 8px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid #e8f5e8;
+}
+
+@keyframes slideInFromRight {
+  0% {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
 /* 响应式设计 */
 @media (max-width: 480px) {
   .word-translator-tooltip {
@@ -244,5 +272,14 @@
   
   .word {
     font-size: 15px;
+  }
+  
+  /* 移动设备上剪切板翻译框位置调整 */
+  .word-translator-tooltip.clipboard-tooltip {
+    position: fixed !important;
+    top: 10px !important;
+    right: 10px !important;
+    left: auto !important;
+    max-width: calc(100vw - 20px);
   }
 }

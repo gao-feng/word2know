@@ -6,7 +6,8 @@
     "permissions": [
         "activeTab",
         "storage",
-        "downloads"
+        "downloads",
+        "clipboardRead"
     ],
     "host_permissions": [
         "https://translate.googleapis.com/*",

@@ -9,12 +9,15 @@ class WordTranslator {
     this.settings = {
       enabled: true,
       autoSpeak: false,
-      translationService: 'google' // 默认使用Google翻译
+      translationService: 'google', // 默认使用Google翻译
+      clipboardEnabled: true // 默认启用剪切板监听
     };
     this.selectedText = '';
     this.selectionRect = null;
     this.siliconFlowTranslator = new SiliconFlowTranslator();
     this.openaiTranslator = new OpenAITranslator();
+    this.lastClipboardContent = '';
+    this.clipboardCheckInterval = null;
     this.init();
   }
 
@@ -24,20 +27,38 @@ class WordTranslator {
     this.createTranslateButton();
     this.bindEvents();
     this.listenForMessages();
+    this.initClipboardMonitoring();
   }
 
   loadSettings() {
-    chrome.storage.sync.get(['enabled', 'autoSpeak', 'translationService'], (result) => {
+    chrome.storage.sync.get(['enabled', 'autoSpeak', 'translationService', 'clipboardEnabled'], (result) => {
       this.settings.enabled = result.enabled !== false;
       this.settings.autoSpeak = result.autoSpeak === true;
       this.settings.translationService = result.translationService || 'google';
+      this.settings.clipboardEnabled = result.clipboardEnabled !== false;
+
+      // 根据设置启动或停止剪切板监听
+      if (this.settings.clipboardEnabled) {
+        this.startClipboardMonitoring();
+      } else {
+        this.stopClipboardMonitoring();
+      }
     });
   }
 
   listenForMessages() {
-    chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    chrome.runtime.onMessage.addListener((message) => {
       if (message.action === 'updateSettings') {
         Object.assign(this.settings, message.settings);
+
+        // 如果剪切板设置发生变化，更新监听状态
+        if ('clipboardEnabled' in message.settings) {
+          if (message.settings.clipboardEnabled) {
+            this.startClipboardMonitoring();
+          } else {
+            this.stopClipboardMonitoring();
+          }
+        }
       } else if (message.action === 'updateSiliconFlowApiKey') {
         this.siliconFlowTranslator.setApiKey(message.apiKey);
       } else if (message.action === 'updateOpenAIConfig') {
@@ -71,6 +92,14 @@ class WordTranslator {
     document.addEventListener('mouseup', this.handleTextSelection.bind(this));
     document.addEventListener('selectionchange', this.handleSelectionChange.bind(this));
     document.addEventListener('click', this.handleClick.bind(this));
+
+    // 监听页面获得焦点事件，用于检查剪切板
+    window.addEventListener('focus', this.checkClipboard.bind(this));
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) {
+        this.checkClipboard();
+      }
+    });
   }
 
   handleTextSelection(event) {
@@ -172,6 +201,7 @@ class WordTranslator {
 
   hideTooltip() {
     this.tooltip.style.display = 'none';
+    this.tooltip.classList.remove('clipboard-tooltip');
     this.currentWord = '';
   }
 
@@ -356,7 +386,7 @@ class WordTranslator {
       html += `<div class="translation-source">来源：${data.source}</div>`;
     }
 
-    html += `<div class="tooltip-hint">点击外部区域关闭</div></div>`;
+    html += `<div class="tooltip-hint">点击 ✕ 按钮或外部区域关闭</div></div>`;
 
     this.tooltip.innerHTML = html;
 
@@ -472,6 +502,76 @@ class WordTranslator {
         messageDiv.parentNode.removeChild(messageDiv);
       }
     }, 2000);
+  }
+
+  // 剪切板监听相关方法
+  initClipboardMonitoring() {
+    // 初始化时获取当前剪切板内容
+    this.checkClipboard();
+  }
+
+  startClipboardMonitoring() {
+    if (this.clipboardCheckInterval) {
+      clearInterval(this.clipboardCheckInterval);
+    }
+
+    // 每2秒检查一次剪切板（降低频率以提高性能）
+    this.clipboardCheckInterval = setInterval(() => {
+      this.checkClipboard();
+    }, 2000);
+  }
+
+  stopClipboardMonitoring() {
+    if (this.clipboardCheckInterval) {
+      clearInterval(this.clipboardCheckInterval);
+      this.clipboardCheckInterval = null;
+    }
+  }
+
+  async checkClipboard() {
+    if (!this.settings.enabled || !this.settings.clipboardEnabled) {
+      return;
+    }
+
+    try {
+      // 读取剪切板内容
+      const clipboardText = await navigator.clipboard.readText();
+
+      if (clipboardText && clipboardText !== this.lastClipboardContent) {
+        this.lastClipboardContent = clipboardText;
+
+        // 检查是否为英文单词或短语
+        const trimmedText = clipboardText.trim();
+        if (this.isEnglishWord(trimmedText)) {
+          this.handleClipboardTranslation(trimmedText);
+        }
+      }
+    } catch (error) {
+      // 静默处理剪切板访问错误（可能是权限问题或浏览器限制）
+      console.debug('剪切板访问失败:', error.message);
+    }
+  }
+
+  handleClipboardTranslation(word) {
+    // 显示剪切板翻译提示
+    this.showClipboardTooltip(word);
+
+    // 自动翻译
+    this.currentWord = word;
+    this.translateWord(word);
+  }
+
+  showClipboardTooltip(word) {
+    // 在屏幕右上角显示翻译框
+    const x = window.innerWidth - 350;
+    const y = 50;
+
+    this.showTooltip(x, y);
+
+    // 添加剪切板来源标识
+    this.tooltip.classList.add('clipboard-tooltip');
+
+    // 不再自动隐藏，让用户通过关闭按钮手动关闭
   }
 }
 
