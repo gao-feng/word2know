@@ -128,7 +128,8 @@ class SiliconFlowTranslator {
     {
       "partOfSpeech": "词性",
       "meaning": "释义",
-      "example": "例句"
+      "englishExample": "英文例句",
+      "chineseExample": "中文例句翻译"
     }
   ],
   "synonyms": ["同义词1", "同义词2"],
@@ -139,8 +140,9 @@ class SiliconFlowTranslator {
 1. 如果是单词，请提供音标；如果是短语，请提供发音指导
 2. 提供2-3个主要释义即可
 3. 同义词和常用短语各提供2-3个即可
-4. 例句要简洁明了
-5. 只返回JSON格式，不要其他说明文字`;
+4. 每个释义都要提供英文例句和对应的中文翻译
+5. 英文例句要简洁实用，便于学习
+6. 只返回JSON格式，不要其他说明文字`;
   }
 
   // 解析翻译响应

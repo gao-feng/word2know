@@ -210,6 +210,30 @@
   display: block;
 }
 
+/* 英文和中文例句样式 */
+.examples {
+  margin-top: 6px;
+  padding: 8px;
+  background-color: #f8f9fa;
+  border-radius: 4px;
+  border-left: 3px solid #1976d2;
+}
+
+.english-example {
+  color: #2e7d32;
+  font-size: 12px;
+  font-weight: 500;
+  margin-bottom: 4px;
+  line-height: 1.4;
+}
+
+.chinese-example {
+  color: #666;
+  font-size: 12px;
+  font-style: italic;
+  line-height: 1.4;
+}
+
 .synonyms, .phrases {
   margin-top: 6px;
   font-size: 12px;
