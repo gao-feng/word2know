@@ -815,7 +815,7 @@ class WordTranslator {
         return;
       }
 
-      // 添加新单词
+      // 添加新单词 - 保存完整的详细信息
       const newWord = {
         word: data.word,
         translation: data.translation || data.explanation,
@@ -826,12 +826,38 @@ class WordTranslator {
         syncedAt: null,
         bookId: bookId,
         wordType: data.wordType || this.getWordType(data.word),
-        // 中文词汇特有字段
+
+        // 详细释义信息
+        definitions: data.definitions || [],
+
+        // 同义词和反义词
         synonyms: data.synonyms || [],
         antonyms: data.antonyms || [],
+
+        // 常用短语和词组
+        phrases: data.phrases || [],
+
+        // 词汇来源和构成
         etymology: data.etymology || '',
+
+        // 使用说明和语境
         usage: data.usage || '',
-        definitions: data.definitions || []
+
+        // 翻译来源
+        source: data.source || '',
+
+        // 原始解释（中文词汇）
+        explanation: data.explanation || '',
+
+        // 扩展信息（保留原始API返回的所有数据）
+        originalData: {
+          source: data.source,
+          wordType: data.wordType,
+          rawDefinitions: data.definitions,
+          rawSynonyms: data.synonyms,
+          rawAntonyms: data.antonyms,
+          rawPhrases: data.phrases
+        }
       };
 
       vocabulary.unshift(newWord); // 添加到开头

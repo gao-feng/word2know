@@ -188,15 +188,30 @@ class AnkiConnect {
             tags.push('english');
           }
           
-          const note = {
-            deckName: deckName,
-            modelName: 'Basic',
-            fields: {
-              Front: cardContent.front,
-              Back: cardContent.back
-            },
-            tags: tags
-          };
+          // 尝试使用自定义模板，如果不存在则使用Basic模板
+          const modelName = await this.ensureVocabularyModel(wordType);
+          
+          let note;
+          if (modelName === 'VocabularyCard') {
+            // 使用自定义词汇卡片模板
+            note = {
+              deckName: deckName,
+              modelName: 'VocabularyCard',
+              fields: this.formatAdvancedCardFields(item, wordType),
+              tags: tags
+            };
+          } else {
+            // 使用基础模板
+            note = {
+              deckName: deckName,
+              modelName: 'Basic',
+              fields: {
+                Front: cardContent.front,
+                Back: cardContent.back
+              },
+              tags: tags
+            };
+          }
 
           // 如果有音频数据，先存储音频文件
           if (audioData) {
@@ -234,122 +249,517 @@ class AnkiConnect {
     }
   }
 
-  // 格式化卡片内容（支持中英文词汇）
+  // 格式化卡片内容（支持中英文词汇，包含完整详细信息）
   formatCardContent(item, wordType) {
     const front = item.word;
     let back = '';
 
     if (wordType === 'chinese') {
-      // 中文词汇卡片格式
-      back = `<div class="chinese-card">`;
+      // 中文词汇卡片格式 - 包含完整信息
+      back = `<div class="chinese-card" style="font-family: 'Microsoft YaHei', Arial, sans-serif; line-height: 1.6;">`;
       
       // 基本解释
-      if (item.translation) {
-        back += `<div><strong>解释：</strong>${item.translation}</div><br>`;
+      if (item.translation || item.explanation) {
+        const explanation = item.explanation || item.translation;
+        back += `<div style="margin-bottom: 12px;"><strong style="color: #ff9800;">解释：</strong>${explanation}</div>`;
       }
       
       // 拼音
       if (item.pronunciation) {
-        back += `<div><strong>拼音：</strong>${item.pronunciation}</div><br>`;
+        back += `<div style="margin-bottom: 12px;"><strong style="color: #2196f3;">拼音：</strong><span style="font-family: 'Times New Roman', serif;">${item.pronunciation}</span></div>`;
       }
       
       // 详细释义
       if (item.definitions && item.definitions.length > 0) {
-        back += `<div><strong>详细释义：</strong></div><ul>`;
-        item.definitions.slice(0, 3).forEach(def => {
-          back += `<li>`;
-          if (def.partOfSpeech) {
-            back += `<em>${def.partOfSpeech}</em> `;
+        back += `<div style="margin-bottom: 12px;"><strong style="color: #4caf50;">详细释义：</strong></div>`;
+        back += `<ul style="margin: 8px 0; padding-left: 20px;">`;
+        item.definitions.forEach((def, index) => {
+          if (index < 5) { // 显示最多5个释义
+            back += `<li style="margin-bottom: 8px;">`;
+            if (def.partOfSpeech) {
+              back += `<em style="color: #9c27b0; font-weight: 600;">[${def.partOfSpeech}]</em> `;
+            }
+            back += `${def.meaning}`;
+            if (def.example) {
+              back += `<br><small style="color: #666; font-style: italic;">例句：${def.example}</small>`;
+            }
+            back += `</li>`;
           }
-          back += `${def.meaning}`;
-          if (def.example) {
-            back += `<br><small>例：${def.example}</small>`;
-          }
-          back += `</li>`;
         });
-        back += `</ul><br>`;
+        back += `</ul>`;
       }
       
       // 同义词
       if (item.synonyms && item.synonyms.length > 0) {
-        back += `<div><strong>同义词：</strong>${item.synonyms.slice(0, 3).join('、')}</div><br>`;
+        back += `<div style="margin-bottom: 12px;"><strong style="color: #4caf50;">同义词：</strong>`;
+        back += `<span style="color: #2e7d32;">${item.synonyms.slice(0, 5).join('、')}</span></div>`;
       }
       
       // 反义词
       if (item.antonyms && item.antonyms.length > 0) {
-        back += `<div><strong>反义词：</strong>${item.antonyms.slice(0, 3).join('、')}</div><br>`;
+        back += `<div style="margin-bottom: 12px;"><strong style="color: #f44336;">反义词：</strong>`;
+        back += `<span style="color: #c62828;">${item.antonyms.slice(0, 5).join('、')}</span></div>`;
       }
       
       // 常用词组
       if (item.phrases && item.phrases.length > 0) {
-        back += `<div><strong>常用词组：</strong>${item.phrases.slice(0, 3).join('、')}</div><br>`;
+        back += `<div style="margin-bottom: 12px;"><strong style="color: #795548;">常用词组：</strong>`;
+        back += `<span style="color: #5d4037;">${item.phrases.slice(0, 5).join('、')}</span></div>`;
       }
       
       // 词汇来源
       if (item.etymology) {
-        back += `<div><strong>词汇来源：</strong>${item.etymology}</div><br>`;
+        back += `<div style="margin-bottom: 12px; padding: 8px; background-color: #fff3e0; border-left: 3px solid #ff9800; border-radius: 4px;">`;
+        back += `<strong style="color: #e65100;">词汇来源：</strong>${item.etymology}</div>`;
       }
       
       // 使用说明
       if (item.usage) {
-        back += `<div><strong>使用说明：</strong>${item.usage}</div>`;
+        back += `<div style="margin-bottom: 12px; padding: 8px; background-color: #e8f5e8; border-left: 3px solid #4caf50; border-radius: 4px;">`;
+        back += `<strong style="color: #2e7d32;">使用说明：</strong>${item.usage}</div>`;
+      }
+      
+      // 添加时间和来源信息
+      if (item.addedAt) {
+        const addedDate = new Date(item.addedAt).toLocaleDateString('zh-CN');
+        back += `<div style="margin-top: 16px; padding-top: 8px; border-top: 1px solid #e0e0e0; font-size: 12px; color: #999;">`;
+        back += `添加时间：${addedDate}`;
+        if (item.source) {
+          back += ` | 来源：${item.source}`;
+        }
+        back += `</div>`;
       }
       
       back += `</div>`;
       
     } else {
-      // 英文词汇卡片格式
-      back = `<div class="english-card">`;
+      // 英文词汇卡片格式 - 包含完整信息
+      back = `<div class="english-card" style="font-family: Arial, 'Times New Roman', serif; line-height: 1.6;">`;
       
       // 中文翻译
       if (item.translation) {
-        back += `<div><strong>中文：</strong>${item.translation}</div><br>`;
+        back += `<div style="margin-bottom: 12px;"><strong style="color: #1976d2;">中文：</strong>${item.translation}</div>`;
       }
       
       // 音标
       if (item.pronunciation) {
-        back += `<div><strong>发音：</strong>${item.pronunciation}</div><br>`;
+        back += `<div style="margin-bottom: 12px;"><strong style="color: #2196f3;">发音：</strong>`;
+        back += `<span style="font-family: 'Times New Roman', serif; font-size: 16px;">${item.pronunciation}</span></div>`;
       }
       
       // 详细释义
       if (item.definitions && item.definitions.length > 0) {
-        back += `<div><strong>详细释义：</strong></div><ul>`;
-        item.definitions.slice(0, 3).forEach(def => {
-          back += `<li>`;
-          if (def.partOfSpeech) {
-            back += `<em>${def.partOfSpeech}</em> `;
+        back += `<div style="margin-bottom: 12px;"><strong style="color: #4caf50;">详细释义：</strong></div>`;
+        back += `<ul style="margin: 8px 0; padding-left: 20px;">`;
+        item.definitions.forEach((def, index) => {
+          if (index < 5) { // 显示最多5个释义
+            back += `<li style="margin-bottom: 10px;">`;
+            if (def.partOfSpeech) {
+              back += `<em style="color: #9c27b0; font-weight: 600;">[${def.partOfSpeech}]</em> `;
+            }
+            back += `${def.meaning}`;
+            
+            // 英文例句
+            if (def.englishExample) {
+              back += `<br><small style="color: #2e7d32; margin-top: 4px; display: block;">📝 ${def.englishExample}</small>`;
+            }
+            
+            // 中文例句
+            if (def.chineseExample) {
+              back += `<br><small style="color: #666; margin-top: 2px; display: block;">🔤 ${def.chineseExample}</small>`;
+            }
+            
+            // 兼容旧格式的例句
+            if (!def.englishExample && !def.chineseExample && def.example) {
+              back += `<br><small style="color: #666; font-style: italic; margin-top: 4px; display: block;">例句：${def.example}</small>`;
+            }
+            
+            back += `</li>`;
           }
-          back += `${def.meaning}`;
-          
-          // 英文例句
-          if (def.englishExample) {
-            back += `<br><small>📝 ${def.englishExample}</small>`;
-          }
-          
-          // 中文例句
-          if (def.chineseExample) {
-            back += `<br><small>🔤 ${def.chineseExample}</small>`;
-          }
-          
-          back += `</li>`;
         });
-        back += `</ul><br>`;
+        back += `</ul>`;
       }
       
       // 同义词
       if (item.synonyms && item.synonyms.length > 0) {
-        back += `<div><strong>同义词：</strong>${item.synonyms.slice(0, 3).join(', ')}</div><br>`;
+        back += `<div style="margin-bottom: 12px;"><strong style="color: #4caf50;">同义词：</strong>`;
+        back += `<span style="color: #2e7d32;">${item.synonyms.slice(0, 6).join(', ')}</span></div>`;
+      }
+      
+      // 反义词（如果有）
+      if (item.antonyms && item.antonyms.length > 0) {
+        back += `<div style="margin-bottom: 12px;"><strong style="color: #f44336;">反义词：</strong>`;
+        back += `<span style="color: #c62828;">${item.antonyms.slice(0, 6).join(', ')}</span></div>`;
       }
       
       // 常用短语
       if (item.phrases && item.phrases.length > 0) {
-        back += `<div><strong>常用短语：</strong>${item.phrases.slice(0, 3).join(', ')}</div>`;
+        back += `<div style="margin-bottom: 12px;"><strong style="color: #795548;">常用短语：</strong>`;
+        back += `<span style="color: #5d4037;">${item.phrases.slice(0, 6).join(', ')}</span></div>`;
+      }
+      
+      // 词根词缀（如果有）
+      if (item.etymology) {
+        back += `<div style="margin-bottom: 12px; padding: 8px; background-color: #e3f2fd; border-left: 3px solid #1976d2; border-radius: 4px;">`;
+        back += `<strong style="color: #1565c0;">词根词缀：</strong>${item.etymology}</div>`;
+      }
+      
+      // 使用说明（如果有）
+      if (item.usage) {
+        back += `<div style="margin-bottom: 12px; padding: 8px; background-color: #e8f5e8; border-left: 3px solid #4caf50; border-radius: 4px;">`;
+        back += `<strong style="color: #2e7d32;">使用说明：</strong>${item.usage}</div>`;
+      }
+      
+      // 添加时间和来源信息
+      if (item.addedAt) {
+        const addedDate = new Date(item.addedAt).toLocaleDateString('zh-CN');
+        back += `<div style="margin-top: 16px; padding-top: 8px; border-top: 1px solid #e0e0e0; font-size: 12px; color: #999;">`;
+        back += `添加时间：${addedDate}`;
+        if (item.source) {
+          back += ` | 来源：${item.source}`;
+        }
+        back += `</div>`;
       }
       
       back += `</div>`;
     }
 
     return { front, back };
+  }
+
+  // 确保词汇卡片模板存在
+  async ensureVocabularyModel(wordType) {
+    try {
+      const modelNames = await this.invoke('modelNames');
+      
+      if (!modelNames.includes('VocabularyCard')) {
+        // 创建自定义词汇卡片模板
+        await this.createVocabularyModel();
+        return 'VocabularyCard';
+      }
+      
+      return 'VocabularyCard';
+    } catch (error) {
+      console.warn('无法创建自定义模板，使用Basic模板:', error);
+      return 'Basic';
+    }
+  }
+
+  // 创建自定义词汇卡片模板
+  async createVocabularyModel() {
+    const modelData = {
+      modelName: 'VocabularyCard',
+      inOrderFields: [
+        'Word',           // 单词/词汇
+        'Translation',    // 翻译/解释
+        'Pronunciation',  // 发音/拼音
+        'Definitions',    // 详细释义
+        'Synonyms',       // 同义词
+        'Antonyms',       // 反义词
+        'Phrases',        // 常用短语
+        'Etymology',      // 词汇来源
+        'Usage',          // 使用说明
+        'Examples',       // 例句
+        'WordType',       // 词汇类型
+        'Source',         // 来源
+        'AddedDate'       // 添加日期
+      ],
+      css: `
+        .card {
+          font-family: 'Microsoft YaHei', Arial, sans-serif;
+          font-size: 16px;
+          line-height: 1.6;
+          color: #333;
+          background-color: #fff;
+          padding: 20px;
+        }
+        
+        .word {
+          font-size: 24px;
+          font-weight: bold;
+          color: #1976d2;
+          margin-bottom: 15px;
+          text-align: center;
+        }
+        
+        .chinese-word {
+          color: #ff9800;
+        }
+        
+        .pronunciation {
+          font-size: 18px;
+          color: #2196f3;
+          font-family: 'Times New Roman', serif;
+          text-align: center;
+          margin-bottom: 15px;
+        }
+        
+        .translation {
+          font-size: 18px;
+          color: #4caf50;
+          margin-bottom: 15px;
+          padding: 10px;
+          background-color: #f8f9fa;
+          border-left: 4px solid #4caf50;
+          border-radius: 4px;
+        }
+        
+        .section {
+          margin-bottom: 15px;
+        }
+        
+        .section-title {
+          font-weight: bold;
+          color: #666;
+          margin-bottom: 8px;
+          font-size: 14px;
+          text-transform: uppercase;
+        }
+        
+        .definitions {
+          background-color: #f5f5f5;
+          padding: 12px;
+          border-radius: 6px;
+        }
+        
+        .definition-item {
+          margin-bottom: 10px;
+          padding-bottom: 8px;
+          border-bottom: 1px solid #e0e0e0;
+        }
+        
+        .definition-item:last-child {
+          border-bottom: none;
+          margin-bottom: 0;
+        }
+        
+        .part-of-speech {
+          color: #9c27b0;
+          font-weight: bold;
+          font-size: 12px;
+        }
+        
+        .example {
+          color: #666;
+          font-style: italic;
+          font-size: 14px;
+          margin-top: 5px;
+        }
+        
+        .synonyms, .antonyms {
+          padding: 8px 12px;
+          border-radius: 4px;
+          margin-bottom: 10px;
+        }
+        
+        .synonyms {
+          background-color: #e8f5e8;
+          border-left: 3px solid #4caf50;
+        }
+        
+        .antonyms {
+          background-color: #ffebee;
+          border-left: 3px solid #f44336;
+        }
+        
+        .phrases {
+          background-color: #fff3e0;
+          padding: 8px 12px;
+          border-radius: 4px;
+          border-left: 3px solid #ff9800;
+        }
+        
+        .etymology, .usage {
+          background-color: #e3f2fd;
+          padding: 10px;
+          border-radius: 4px;
+          border-left: 3px solid #2196f3;
+          font-size: 14px;
+        }
+        
+        .meta-info {
+          margin-top: 20px;
+          padding-top: 15px;
+          border-top: 1px solid #e0e0e0;
+          font-size: 12px;
+          color: #999;
+          text-align: right;
+        }
+        
+        .word-type {
+          display: inline-block;
+          padding: 2px 8px;
+          border-radius: 12px;
+          font-size: 11px;
+          font-weight: bold;
+          color: white;
+        }
+        
+        .english-type {
+          background-color: #1976d2;
+        }
+        
+        .chinese-type {
+          background-color: #ff9800;
+        }
+      `,
+      cardTemplates: [
+        {
+          Name: 'Card 1',
+          Front: `
+            <div class="word {{#WordType}}{{WordType}}-word{{/WordType}}">{{Word}}</div>
+            {{#Pronunciation}}<div class="pronunciation">{{Pronunciation}}</div>{{/Pronunciation}}
+            {{#WordType}}<div class="word-type {{WordType}}-type">{{WordType}}</div>{{/WordType}}
+          `,
+          Back: `
+            <div class="word {{#WordType}}{{WordType}}-word{{/WordType}}">{{Word}}</div>
+            {{#Pronunciation}}<div class="pronunciation">{{Pronunciation}}</div>{{/Pronunciation}}
+            
+            {{#Translation}}
+            <div class="translation">{{Translation}}</div>
+            {{/Translation}}
+            
+            {{#Definitions}}
+            <div class="section">
+              <div class="section-title">详细释义</div>
+              <div class="definitions">{{Definitions}}</div>
+            </div>
+            {{/Definitions}}
+            
+            {{#Synonyms}}
+            <div class="section">
+              <div class="synonyms">
+                <strong>同义词：</strong>{{Synonyms}}
+              </div>
+            </div>
+            {{/Synonyms}}
+            
+            {{#Antonyms}}
+            <div class="section">
+              <div class="antonyms">
+                <strong>反义词：</strong>{{Antonyms}}
+              </div>
+            </div>
+            {{/Antonyms}}
+            
+            {{#Phrases}}
+            <div class="section">
+              <div class="phrases">
+                <strong>常用短语：</strong>{{Phrases}}
+              </div>
+            </div>
+            {{/Phrases}}
+            
+            {{#Etymology}}
+            <div class="section">
+              <div class="etymology">
+                <strong>词汇来源：</strong>{{Etymology}}
+              </div>
+            </div>
+            {{/Etymology}}
+            
+            {{#Usage}}
+            <div class="section">
+              <div class="usage">
+                <strong>使用说明：</strong>{{Usage}}
+              </div>
+            </div>
+            {{/Usage}}
+            
+            {{#Examples}}
+            <div class="section">
+              <div class="section-title">例句</div>
+              <div class="examples">{{Examples}}</div>
+            </div>
+            {{/Examples}}
+            
+            <div class="meta-info">
+              {{#Source}}来源：{{Source}} | {{/Source}}
+              {{#AddedDate}}添加：{{AddedDate}}{{/AddedDate}}
+            </div>
+          `
+        }
+      ]
+    };
+
+    return await this.invoke('createModel', modelData);
+  }
+
+  // 格式化高级卡片字段
+  formatAdvancedCardFields(item, wordType) {
+    const fields = {
+      Word: item.word || '',
+      Translation: item.translation || item.explanation || '',
+      Pronunciation: item.pronunciation || '',
+      WordType: wordType === 'chinese' ? 'chinese' : 'english',
+      Source: item.source || '',
+      AddedDate: item.addedAt ? new Date(item.addedAt).toLocaleDateString('zh-CN') : ''
+    };
+
+    // 格式化详细释义
+    if (item.definitions && item.definitions.length > 0) {
+      let definitionsHtml = '';
+      item.definitions.forEach((def, index) => {
+        if (index < 5) {
+          definitionsHtml += '<div class="definition-item">';
+          if (def.partOfSpeech) {
+            definitionsHtml += `<span class="part-of-speech">[${def.partOfSpeech}]</span> `;
+          }
+          definitionsHtml += def.meaning || '';
+          
+          if (def.englishExample) {
+            definitionsHtml += `<div class="example">📝 ${def.englishExample}</div>`;
+          }
+          if (def.chineseExample) {
+            definitionsHtml += `<div class="example">🔤 ${def.chineseExample}</div>`;
+          }
+          if (!def.englishExample && !def.chineseExample && def.example) {
+            definitionsHtml += `<div class="example">${def.example}</div>`;
+          }
+          
+          definitionsHtml += '</div>';
+        }
+      });
+      fields.Definitions = definitionsHtml;
+    }
+
+    // 格式化同义词
+    if (item.synonyms && item.synonyms.length > 0) {
+      fields.Synonyms = item.synonyms.slice(0, 6).join(wordType === 'chinese' ? '、' : ', ');
+    }
+
+    // 格式化反义词
+    if (item.antonyms && item.antonyms.length > 0) {
+      fields.Antonyms = item.antonyms.slice(0, 6).join(wordType === 'chinese' ? '、' : ', ');
+    }
+
+    // 格式化常用短语
+    if (item.phrases && item.phrases.length > 0) {
+      fields.Phrases = item.phrases.slice(0, 6).join(wordType === 'chinese' ? '、' : ', ');
+    }
+
+    // 词汇来源
+    if (item.etymology) {
+      fields.Etymology = item.etymology;
+    }
+
+    // 使用说明
+    if (item.usage) {
+      fields.Usage = item.usage;
+    }
+
+    // 格式化例句（如果有独立的例句字段）
+    if (item.examples && item.examples.length > 0) {
+      let examplesHtml = '';
+      item.examples.forEach((example, index) => {
+        if (index < 3) {
+          examplesHtml += `<div class="example">${example}</div>`;
+        }
+      });
+      fields.Examples = examplesHtml;
+    }
+
+    return fields;
   }
 
   // 检查笔记是否已存在
