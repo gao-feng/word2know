@@ -556,7 +556,7 @@ document.addEventListener('DOMContentLoaded', function() {
     document.body.appendChild(modal);
   }
 
-  // 同步到Anki功能
+  // 同步到Anki功能 - 支持多生词本对应多牌组
   async function syncToAnki() {
     const syncBtn = document.getElementById('syncAnki');
     const originalText = syncBtn.textContent;
@@ -574,92 +574,116 @@ document.addEventListener('DOMContentLoaded', function() {
         throw new Error('无法连接到Anki。请确保Anki已启动并安装了AnkiConnect插件。');
       }
 
-      // 获取生词表
-      const vocabulary = await getVocabulary();
-      
-      // 检查牌组是否存在，如果不存在则创建
-      const deckName = '英语生词';
+      // 获取所有生词本
+      const vocabularyBooks = await getVocabularyBooks();
       syncBtn.textContent = '🔄 检查牌组...';
       
       const deckNames = await ankiConnect.getDeckNames();
-      if (!deckNames.includes(deckName)) {
-        console.log(`牌组 "${deckName}" 不存在，正在创建...`);
-        await ankiConnect.createDeck(deckName);
-        showSyncMessage(`已重新创建牌组 "${deckName}"`, 'info');
+      let totalSyncedWords = 0;
+      let totalSkippedWords = 0;
+      const syncResults = [];
+
+      // 遍历每个生词本
+      for (const [bookId, book] of Object.entries(vocabularyBooks)) {
+        if (!book.words || book.words.length === 0) continue;
+
+        // 生成对应的Anki牌组名称
+        const deckName = generateDeckName(book);
         
-        // 如果牌组被删除了，需要重置所有生词的同步状态
-        let needsReset = false;
-        for (let item of vocabulary) {
-          if (item.ankiSynced) {
-            item.ankiSynced = false;
-            delete item.ankiNoteId;
-            delete item.syncedAt;
-            needsReset = true;
+        // 检查牌组是否存在，如果不存在则创建
+        if (!deckNames.includes(deckName)) {
+          console.log(`牌组 "${deckName}" 不存在，正在创建...`);
+          await ankiConnect.createDeck(deckName);
+          showSyncMessage(`已创建牌组 "${deckName}"`, 'info');
+          
+          // 重置该生词本中所有生词的同步状态
+          let needsReset = false;
+          for (let item of book.words) {
+            if (item.ankiSynced) {
+              item.ankiSynced = false;
+              delete item.ankiNoteId;
+              delete item.syncedAt;
+              needsReset = true;
+            }
+          }
+          
+          if (needsReset) {
+            await saveVocabularyBooks(vocabularyBooks);
+            console.log(`已重置生词本 "${book.name}" 的同步状态`);
           }
         }
         
-        if (needsReset) {
-          await saveVocabulary(vocabulary);
-          console.log('已重置所有生词的同步状态');
-        }
-      }
-      
-      // 筛选未同步的单词
-      const unsyncedWords = vocabulary.filter(item => !item.ankiSynced);
-      
-      if (unsyncedWords.length === 0) {
-        showSyncMessage('所有生词已同步到Anki', 'success');
-        return;
-      }
-
-      syncBtn.textContent = `🔄 获取发音 (0/${unsyncedWords.length})`;
-
-      // 批量添加到Anki（包含音频）
-      const noteIds = await ankiConnect.addNotes(unsyncedWords, '英语生词', (progress) => {
-        syncBtn.textContent = `🔄 同步中 (${progress}/${unsyncedWords.length})`;
-      });
-      
-      // 更新同步状态
-      let successCount = 0;
-      let skippedCount = 0;
-      
-      for (let i = 0; i < unsyncedWords.length; i++) {
-        const wordIndex = vocabulary.findIndex(item => 
-          item.word === unsyncedWords[i].word && !item.ankiSynced
-        );
+        // 筛选未同步的单词
+        const unsyncedWords = book.words.filter(item => !item.ankiSynced);
         
-        if (wordIndex !== -1) {
-          if (noteIds[i] !== null) {
-            // 成功添加到Anki
-            vocabulary[wordIndex].ankiSynced = true;
-            vocabulary[wordIndex].ankiNoteId = noteIds[i];
-            vocabulary[wordIndex].syncedAt = new Date().toISOString();
-            successCount++;
-          } else {
-            // 跳过（已存在或其他原因）
-            // 仍然标记为已同步，避免重复尝试
-            vocabulary[wordIndex].ankiSynced = true;
-            vocabulary[wordIndex].ankiNoteId = 'skipped';
-            vocabulary[wordIndex].syncedAt = new Date().toISOString();
-            skippedCount++;
+        if (unsyncedWords.length === 0) {
+          syncResults.push(`"${book.name}": 所有生词已同步`);
+          continue;
+        }
+
+        syncBtn.textContent = `🔄 同步 "${book.name}" (0/${unsyncedWords.length})`;
+
+        // 批量添加到对应的Anki牌组
+        const noteIds = await ankiConnect.addNotes(unsyncedWords, deckName, (progress) => {
+          syncBtn.textContent = `🔄 同步 "${book.name}" (${progress}/${unsyncedWords.length})`;
+        });
+        
+        // 更新同步状态
+        let bookSyncedCount = 0;
+        let bookSkippedCount = 0;
+        
+        for (let i = 0; i < unsyncedWords.length; i++) {
+          const wordIndex = book.words.findIndex(item => 
+            item.word === unsyncedWords[i].word && !item.ankiSynced
+          );
+          
+          if (wordIndex !== -1) {
+            if (noteIds[i] !== null) {
+              // 成功添加到Anki
+              book.words[wordIndex].ankiSynced = true;
+              book.words[wordIndex].ankiNoteId = noteIds[i];
+              book.words[wordIndex].syncedAt = new Date().toISOString();
+              book.words[wordIndex].ankiDeckName = deckName; // 记录牌组名称
+              bookSyncedCount++;
+            } else {
+              // 跳过（已存在或其他原因）
+              book.words[wordIndex].ankiSynced = true;
+              book.words[wordIndex].ankiNoteId = 'skipped';
+              book.words[wordIndex].syncedAt = new Date().toISOString();
+              book.words[wordIndex].ankiDeckName = deckName;
+              bookSkippedCount++;
+            }
           }
         }
+
+        totalSyncedWords += bookSyncedCount;
+        totalSkippedWords += bookSkippedCount;
+        
+        // 记录每个生词本的同步结果
+        if (bookSyncedCount > 0 && bookSkippedCount > 0) {
+          syncResults.push(`"${book.name}": 新增${bookSyncedCount}个，跳过${bookSkippedCount}个`);
+        } else if (bookSyncedCount > 0) {
+          syncResults.push(`"${book.name}": 成功同步${bookSyncedCount}个生词`);
+        } else if (bookSkippedCount > 0) {
+          syncResults.push(`"${book.name}": ${bookSkippedCount}个生词已存在`);
+        }
       }
 
-      // 保存更新后的生词表
-      await saveVocabulary(vocabulary);
+      // 保存更新后的生词本数据
+      await saveVocabularyBooks(vocabularyBooks);
       
       // 刷新显示
       loadVocabulary();
+      loadVocabularyBooks();
       
       // 显示同步结果
       let message = '';
-      if (successCount > 0 && skippedCount > 0) {
-        message = `同步完成：新增 ${successCount} 个，跳过 ${skippedCount} 个已存在的生词`;
-      } else if (successCount > 0) {
-        message = `成功同步 ${successCount} 个生词到Anki`;
-      } else if (skippedCount > 0) {
-        message = `${skippedCount} 个生词已存在于Anki中`;
+      if (syncResults.length === 0) {
+        message = '所有生词本都是空的或已同步';
+      } else if (totalSyncedWords > 0 || totalSkippedWords > 0) {
+        const summary = `总计：新增${totalSyncedWords}个，跳过${totalSkippedWords}个`;
+        const details = syncResults.join('\n');
+        message = `${summary}\n\n详细结果：\n${details}`;
       } else {
         message = '同步完成，但没有处理任何生词';
       }
@@ -673,6 +697,26 @@ document.addEventListener('DOMContentLoaded', function() {
       syncBtn.disabled = false;
       syncBtn.textContent = originalText;
     }
+  }
+
+  // 生成Anki牌组名称
+  function generateDeckName(vocabularyBook) {
+    // 清理生词本名称，移除特殊字符
+    let deckName = vocabularyBook.name.replace(/[<>:"/\\|?*]/g, '_');
+    
+    // 添加前缀以区分不同类型的生词本
+    if (vocabularyBook.id === 'default') {
+      deckName = '生词本_默认';
+    } else {
+      deckName = `生词本_${deckName}`;
+    }
+    
+    // 限制长度
+    if (deckName.length > 50) {
+      deckName = deckName.substring(0, 47) + '...';
+    }
+    
+    return deckName;
   }
 
   // 动态加载AnkiConnect

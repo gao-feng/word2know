@@ -109,8 +109,9 @@ class WordTranslator {
       const selection = window.getSelection();
       const selectedText = selection.toString().trim();
 
-      if (selectedText && this.isEnglishWord(selectedText)) {
+      if (selectedText && this.isValidWord(selectedText)) {
         this.selectedText = selectedText;
+        this.currentWordType = this.getWordType(selectedText);
         this.showTranslateButton(selection);
       } else {
         this.hideTranslateButton();
@@ -192,6 +193,45 @@ class WordTranslator {
     return true;
   }
 
+  isChineseWord(word) {
+    if (!word || typeof word !== 'string') return false;
+
+    const cleanWord = word.trim();
+
+    // 检查长度：1-50个字符
+    const isValidLength = cleanWord.length >= 1 && cleanWord.length <= 50;
+    if (!isValidLength) return false;
+
+    // 检查是否包含中文字符
+    const hasChinese = /[\u4e00-\u9fff]/.test(cleanWord);
+    if (!hasChinese) return false;
+
+    // 允许中文字符、标点符号、空格
+    const isValidChars = /^[\u4e00-\u9fff\u3000-\u303f\uff00-\uffef\s\-·]+$/.test(cleanWord);
+    if (!isValidChars) return false;
+
+    // 过滤掉一些无意义的字符串
+    const skipWords = ['的', '了', '是', '在', '有', '和', '就', '不', '人', '都', '一', '个', '上', '也', '很', '到', '说', '要', '去', '你', '会', '着', '没', '看', '好', '自己', '这样', '那样'];
+    if (skipWords.includes(cleanWord)) return false;
+
+    // 过滤掉纯标点符号
+    if (/^[\u3000-\u303f\uff00-\uffef\s\-·]+$/.test(cleanWord)) return false;
+
+    return true;
+  }
+
+  // 检查是否为有效的词汇（英文或中文）
+  isValidWord(word) {
+    return this.isEnglishWord(word) || this.isChineseWord(word);
+  }
+
+  // 获取词汇类型
+  getWordType(word) {
+    if (this.isEnglishWord(word)) return 'english';
+    if (this.isChineseWord(word)) return 'chinese';
+    return null;
+  }
+
   showTooltip(x, y) {
     this.tooltip.style.display = 'block';
     this.tooltip.innerHTML = '<div class="loading">翻译中...</div>';
@@ -254,14 +294,26 @@ class WordTranslator {
   }
 
   async fetchTranslation(word) {
-    switch (this.settings.translationService) {
-      case 'siliconflow':
-        return await this.fetchSiliconFlowTranslation(word);
-      case 'openai':
-        return await this.fetchOpenAITranslation(word);
-      case 'google':
-      default:
-        return await this.fetchGoogleTranslation(word);
+    const wordType = this.getWordType(word);
+
+    if (wordType === 'chinese') {
+      // 中文词汇优先使用OpenAI进行详细解释
+      if (this.settings.translationService === 'openai' || this.settings.translationService === 'siliconflow') {
+        return await this.fetchChineseExplanation(word);
+      } else {
+        return await this.fetchChineseGoogleTranslation(word);
+      }
+    } else {
+      // 英文词汇使用原有逻辑
+      switch (this.settings.translationService) {
+        case 'siliconflow':
+          return await this.fetchSiliconFlowTranslation(word);
+        case 'openai':
+          return await this.fetchOpenAITranslation(word);
+        case 'google':
+        default:
+          return await this.fetchGoogleTranslation(word);
+      }
     }
   }
 
@@ -353,6 +405,85 @@ class WordTranslator {
     };
   }
 
+  // 中文词汇详细解释（使用OpenAI/SiliconFlow）
+  async fetchChineseExplanation(word) {
+    try {
+      let result;
+
+      if (this.settings.translationService === 'siliconflow') {
+        result = await this.siliconFlowTranslator.explainChinese(word);
+      } else {
+        result = await this.openaiTranslator.explainChinese(word);
+      }
+
+      return {
+        word: result.word,
+        translation: result.explanation || result.translation,
+        pronunciation: result.pronunciation || this.generateChinesePronunciation(word),
+        definitions: result.definitions || [],
+        synonyms: result.synonyms || [],
+        antonyms: result.antonyms || [],
+        phrases: result.phrases || [],
+        source: this.settings.translationService === 'siliconflow' ? 'SiliconFlow' : 'OpenAI',
+        wordType: 'chinese'
+      };
+    } catch (error) {
+      console.error('中文词汇解释失败:', error);
+      // 回退到简单解释
+      return await this.fetchChineseGoogleTranslation(word);
+    }
+  }
+
+  // 中文词汇Google翻译（备用方案）
+  async fetchChineseGoogleTranslation(word) {
+    try {
+      const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=zh&tl=en&dt=t&dt=bd&dj=1&q=${encodeURIComponent(word)}`;
+
+      const response = await fetch(url);
+      const data = await response.json();
+
+      let translation = '';
+      if (data.sentences && data.sentences[0]) {
+        translation = data.sentences[0].trans;
+      }
+
+      return {
+        word,
+        translation: translation || '未找到翻译',
+        pronunciation: this.generateChinesePronunciation(word),
+        definitions: [{
+          partOfSpeech: '',
+          meaning: `"${word}"的基本含义`,
+          example: `这是一个包含"${word}"的例句。`
+        }],
+        synonyms: [],
+        antonyms: [],
+        phrases: [],
+        source: 'Google',
+        wordType: 'chinese'
+      };
+    } catch (error) {
+      console.error('中文Google翻译失败:', error);
+      return {
+        word,
+        translation: '翻译失败',
+        pronunciation: this.generateChinesePronunciation(word),
+        definitions: [],
+        synonyms: [],
+        antonyms: [],
+        phrases: [],
+        source: 'Error',
+        wordType: 'chinese'
+      };
+    }
+  }
+
+  // 生成中文拼音（简化处理）
+  generateChinesePronunciation(word) {
+    // 这里可以集成更专业的拼音库，暂时返回简单格式
+    return `[${word}]`;
+  }
+
   // 生成简单的英文例句
   generateSimpleExample(word, partOfSpeech = '') {
     const examples = {
@@ -442,16 +573,19 @@ class WordTranslator {
   }
 
   displayTranslation(data) {
+    const isChineseWord = data.wordType === 'chinese';
+
     let html = `
-      <div class="translation-content">
+      <div class="translation-content ${isChineseWord ? 'chinese-word' : 'english-word'}">
         <div class="word-header">
           <span class="word">${data.word}</span>
+          ${isChineseWord ? '<span class="word-type-badge">中文</span>' : '<span class="word-type-badge">英文</span>'}
           <button class="play-btn">🔊</button>
           <button class="add-word-btn" title="添加到生词表">⭐</button>
           <button class="close-btn">✕</button>
         </div>
         <div class="pronunciation">${data.pronunciation}</div>
-        <div class="translation">${data.translation}</div>
+        <div class="translation">${isChineseWord ? (data.explanation || data.translation) : data.translation}</div>
     `;
 
     // 如果有详细定义（硅基流动返回的数据）
@@ -494,10 +628,31 @@ class WordTranslator {
       </div>`;
     }
 
+    // 如果有反义词（主要用于中文词汇）
+    if (data.antonyms && data.antonyms.length > 0) {
+      html += `<div class="antonyms">
+        <strong>反义词：</strong>${data.antonyms.slice(0, 3).join(', ')}
+      </div>`;
+    }
+
     // 如果有常用短语
     if (data.phrases && data.phrases.length > 0) {
       html += `<div class="phrases">
-        <strong>常用短语：</strong>${data.phrases.slice(0, 3).join(', ')}
+        <strong>${isChineseWord ? '常用词组：' : '常用短语：'}</strong>${data.phrases.slice(0, 3).join(', ')}
+      </div>`;
+    }
+
+    // 如果有词汇来源（主要用于中文词汇）
+    if (data.etymology && isChineseWord) {
+      html += `<div class="etymology">
+        <strong>词汇来源：</strong>${data.etymology}
+      </div>`;
+    }
+
+    // 如果有使用说明（主要用于中文词汇）
+    if (data.usage && isChineseWord) {
+      html += `<div class="usage">
+        <strong>使用说明：</strong>${data.usage}
       </div>`;
     }
 
@@ -663,13 +818,20 @@ class WordTranslator {
       // 添加新单词
       const newWord = {
         word: data.word,
-        translation: data.translation,
+        translation: data.translation || data.explanation,
         pronunciation: data.pronunciation,
         addedAt: new Date().toISOString(),
         ankiSynced: false,
         ankiNoteId: null,
         syncedAt: null,
-        bookId: bookId
+        bookId: bookId,
+        wordType: data.wordType || this.getWordType(data.word),
+        // 中文词汇特有字段
+        synonyms: data.synonyms || [],
+        antonyms: data.antonyms || [],
+        etymology: data.etymology || '',
+        usage: data.usage || '',
+        definitions: data.definitions || []
       };
 
       vocabulary.unshift(newWord); // 添加到开头
@@ -698,7 +860,10 @@ class WordTranslator {
         </div>
         <div class="book-selector-body">
           <div class="word-info">
-            <strong>${data.word}</strong> - ${data.translation}
+            <strong>${data.word}</strong>
+            <span class="word-type-indicator">${data.wordType === 'chinese' ? '中文' : '英文'}</span>
+            <br>
+            ${data.translation || data.explanation}
           </div>
           <div class="book-list" id="bookList">
             <div class="loading">加载中...</div>
@@ -971,9 +1136,10 @@ class WordTranslator {
       if (clipboardText && clipboardText !== this.lastClipboardContent) {
         this.lastClipboardContent = clipboardText;
 
-        // 检查是否为英文单词或短语
+        // 检查是否为有效词汇（英文或中文）
         const trimmedText = clipboardText.trim();
-        if (this.isEnglishWord(trimmedText)) {
+        if (this.isValidWord(trimmedText)) {
+          this.currentWordType = this.getWordType(trimmedText);
           this.handleClipboardTranslation(trimmedText);
         }
       }

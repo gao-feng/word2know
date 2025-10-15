@@ -947,4 +947,88 @@
 
 .create-btn-popup:active {
   transform: translateY(0);
+}/* 中文
+词汇特殊样式 */
+.translation-content.chinese-word {
+  border-left: 4px solid #ff9800;
+}
+
+.translation-content.english-word {
+  border-left: 4px solid #1976d2;
+}
+
+.word-type-badge {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 10px;
+  color: white;
+  font-weight: 500;
+  margin-left: 8px;
+}
+
+.chinese-word .word-type-badge {
+  background: #ff9800;
+}
+
+.english-word .word-type-badge {
+  background: #1976d2;
+}
+
+.antonyms {
+  margin-top: 6px;
+  font-size: 12px;
+}
+
+.antonyms strong {
+  color: #f44336;
+  font-size: 12px;
+}
+
+.etymology,
+.usage {
+  margin-top: 8px;
+  font-size: 12px;
+  padding: 8px;
+  background-color: #fff3e0;
+  border-radius: 4px;
+  border-left: 3px solid #ff9800;
+}
+
+.etymology strong,
+.usage strong {
+  color: #e65100;
+  font-size: 12px;
+}
+
+/* 中文词汇的特殊例句样式 */
+.chinese-word .examples {
+  background-color: #fff3e0;
+  border-left: 3px solid #ff9800;
+}
+
+.chinese-word .english-example {
+  color: #e65100;
+}
+
+.chinese-word .chinese-example {
+  color: #bf360c;
+}
+
+/* 中文词汇的同义词样式 */
+.chinese-word .synonyms strong {
+  color: #4caf50;
+}
+
+/* 响应式设计 - 中文词汇 */
+@media (max-width: 480px) {
+  .etymology,
+  .usage {
+    font-size: 11px;
+    padding: 6px;
+  }
+  
+  .word-type-badge {
+    font-size: 9px;
+    padding: 1px 4px;
+  }
 }

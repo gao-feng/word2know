@@ -138,7 +138,7 @@ class AnkiConnect {
     }
   }
 
-  // 批量添加笔记（带音频和详细信息，智能处理重复）
+  // 批量添加笔记（支持中英文词汇，带音频和详细信息）
   async addNotes(words, deckName = '英语生词', progressCallback = null) {
     try {
       // 确保牌组存在
@@ -162,39 +162,40 @@ class AnkiConnect {
           // 检查是否已存在
           const exists = await this.wordExists(item.word, deckName);
           if (exists) {
-            console.log(`单词 "${item.word}" 已存在于Anki中，跳过`);
+            console.log(`词汇 "${item.word}" 已存在于Anki中，跳过`);
             skippedWords.push(item.word);
             results.push(null); // 标记为跳过
             continue;
           }
 
-          const audioData = await this.getAudioData(item.word);
+          // 根据词汇类型获取音频
+          const wordType = item.wordType || 'english';
+          const audioData = await this.getAudioData(item.word, wordType);
           
-          // 格式化背面内容
-          let backContent = '';
-          if (item.wordDetails) {
-            // 使用详细词典信息
-            const dictionaryService = new (await this.loadDictionaryService())();
-            backContent = dictionaryService.formatForAnki(item.wordDetails, item.translation);
-          } else {
-            // 使用基本信息
-            backContent = `<div><strong>中文：</strong>${item.translation}</div><br>
-                          <div><strong>发音：</strong>${item.pronunciation}</div>`;
-          }
+          // 根据词汇类型格式化卡片内容
+          const cardContent = this.formatCardContent(item, wordType);
           
           // 添加音频
           if (audioData) {
-            backContent += `<br>🔊 [sound:${audioData.filename}]`;
+            cardContent.back += `<br>🔊 [sound:${audioData.filename}]`;
+          }
+          
+          // 根据词汇类型设置标签
+          const tags = ['vocabulary', 'browser-extension'];
+          if (wordType === 'chinese') {
+            tags.push('chinese');
+          } else {
+            tags.push('english');
           }
           
           const note = {
             deckName: deckName,
             modelName: 'Basic',
             fields: {
-              Front: item.word,
-              Back: backContent
+              Front: cardContent.front,
+              Back: cardContent.back
             },
-            tags: ['vocabulary', 'english', 'browser-extension']
+            tags: tags
           };
 
           // 如果有音频数据，先存储音频文件
@@ -231,6 +232,124 @@ class AnkiConnect {
       console.error('批量添加笔记失败:', error);
       throw error;
     }
+  }
+
+  // 格式化卡片内容（支持中英文词汇）
+  formatCardContent(item, wordType) {
+    const front = item.word;
+    let back = '';
+
+    if (wordType === 'chinese') {
+      // 中文词汇卡片格式
+      back = `<div class="chinese-card">`;
+      
+      // 基本解释
+      if (item.translation) {
+        back += `<div><strong>解释：</strong>${item.translation}</div><br>`;
+      }
+      
+      // 拼音
+      if (item.pronunciation) {
+        back += `<div><strong>拼音：</strong>${item.pronunciation}</div><br>`;
+      }
+      
+      // 详细释义
+      if (item.definitions && item.definitions.length > 0) {
+        back += `<div><strong>详细释义：</strong></div><ul>`;
+        item.definitions.slice(0, 3).forEach(def => {
+          back += `<li>`;
+          if (def.partOfSpeech) {
+            back += `<em>${def.partOfSpeech}</em> `;
+          }
+          back += `${def.meaning}`;
+          if (def.example) {
+            back += `<br><small>例：${def.example}</small>`;
+          }
+          back += `</li>`;
+        });
+        back += `</ul><br>`;
+      }
+      
+      // 同义词
+      if (item.synonyms && item.synonyms.length > 0) {
+        back += `<div><strong>同义词：</strong>${item.synonyms.slice(0, 3).join('、')}</div><br>`;
+      }
+      
+      // 反义词
+      if (item.antonyms && item.antonyms.length > 0) {
+        back += `<div><strong>反义词：</strong>${item.antonyms.slice(0, 3).join('、')}</div><br>`;
+      }
+      
+      // 常用词组
+      if (item.phrases && item.phrases.length > 0) {
+        back += `<div><strong>常用词组：</strong>${item.phrases.slice(0, 3).join('、')}</div><br>`;
+      }
+      
+      // 词汇来源
+      if (item.etymology) {
+        back += `<div><strong>词汇来源：</strong>${item.etymology}</div><br>`;
+      }
+      
+      // 使用说明
+      if (item.usage) {
+        back += `<div><strong>使用说明：</strong>${item.usage}</div>`;
+      }
+      
+      back += `</div>`;
+      
+    } else {
+      // 英文词汇卡片格式
+      back = `<div class="english-card">`;
+      
+      // 中文翻译
+      if (item.translation) {
+        back += `<div><strong>中文：</strong>${item.translation}</div><br>`;
+      }
+      
+      // 音标
+      if (item.pronunciation) {
+        back += `<div><strong>发音：</strong>${item.pronunciation}</div><br>`;
+      }
+      
+      // 详细释义
+      if (item.definitions && item.definitions.length > 0) {
+        back += `<div><strong>详细释义：</strong></div><ul>`;
+        item.definitions.slice(0, 3).forEach(def => {
+          back += `<li>`;
+          if (def.partOfSpeech) {
+            back += `<em>${def.partOfSpeech}</em> `;
+          }
+          back += `${def.meaning}`;
+          
+          // 英文例句
+          if (def.englishExample) {
+            back += `<br><small>📝 ${def.englishExample}</small>`;
+          }
+          
+          // 中文例句
+          if (def.chineseExample) {
+            back += `<br><small>🔤 ${def.chineseExample}</small>`;
+          }
+          
+          back += `</li>`;
+        });
+        back += `</ul><br>`;
+      }
+      
+      // 同义词
+      if (item.synonyms && item.synonyms.length > 0) {
+        back += `<div><strong>同义词：</strong>${item.synonyms.slice(0, 3).join(', ')}</div><br>`;
+      }
+      
+      // 常用短语
+      if (item.phrases && item.phrases.length > 0) {
+        back += `<div><strong>常用短语：</strong>${item.phrases.slice(0, 3).join(', ')}</div>`;
+      }
+      
+      back += `</div>`;
+    }
+
+    return { front, back };
   }
 
   // 检查笔记是否已存在
@@ -278,19 +397,22 @@ class AnkiConnect {
     return await this.invoke('notesInfo', { notes: noteIds });
   }
 
-  // 获取单词发音音频数据
-  async getAudioData(word) {
-    // 清理单词，只保留字母和基本符号
-    const cleanWord = word.trim().toLowerCase();
+  // 获取词汇发音音频数据（支持中英文）
+  async getAudioData(word, wordType = 'english') {
+    // 清理词汇
+    const cleanWord = word.trim();
     if (!cleanWord || cleanWord.length > 50) {
       return null;
     }
 
+    // 根据词汇类型选择语言代码
+    const langCode = wordType === 'chinese' ? 'zh' : 'en';
+    
     const ttsServices = [
       // Google TTS (主要)
       {
-        name: 'Google TTS',
-        url: `https://translate.google.com/translate_tts?ie=UTF-8&tl=en&client=tw-ob&q=${encodeURIComponent(cleanWord)}`,
+        name: `Google TTS (${wordType === 'chinese' ? '中文' : '英文'})`,
+        url: `https://translate.google.com/translate_tts?ie=UTF-8&tl=${langCode}&client=tw-ob&q=${encodeURIComponent(cleanWord)}`,
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
           'Referer': 'https://translate.google.com/'
@@ -298,8 +420,8 @@ class AnkiConnect {
       },
       // Google TTS (备用)
       {
-        name: 'Google TTS Alt',
-        url: `https://translate.google.com/translate_tts?ie=UTF-8&tl=en&client=gtx&q=${encodeURIComponent(cleanWord)}`,
+        name: `Google TTS Alt (${wordType === 'chinese' ? '中文' : '英文'})`,
+        url: `https://translate.google.com/translate_tts?ie=UTF-8&tl=${langCode}&client=gtx&q=${encodeURIComponent(cleanWord)}`,
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         }
@@ -327,8 +449,9 @@ class AnkiConnect {
           const audioBuffer = await audioBlob.arrayBuffer();
           const base64Audio = this.arrayBufferToBase64(audioBuffer);
           
-          // 生成唯一的文件名
-          const filename = `tts_${cleanWord.replace(/[^a-zA-Z0-9]/g, '_')}_${Date.now()}.mp3`;
+          // 生成唯一的文件名（支持中文）
+          const safeWord = cleanWord.replace(/[^a-zA-Z0-9\u4e00-\u9fff]/g, '_');
+          const filename = `tts_${wordType}_${safeWord}_${Date.now()}.mp3`;
           
           console.log(`成功从 ${service.name} 获取 "${cleanWord}" 的发音`);
           
