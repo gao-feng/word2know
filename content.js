@@ -552,12 +552,59 @@ class WordTranslator {
     }
   }
 
-  // 存储操作辅助函数 - 使用local存储支持大容量数据
+  // 存储操作辅助函数 - 支持多生词本
+  async getVocabularyBooks() {
+    try {
+      const result = await chrome.storage.local.get(['vocabularyBooks']);
+      return result.vocabularyBooks || {
+        'default': {
+          id: 'default',
+          name: '默认生词本',
+          description: '默认的生词本',
+          createdAt: new Date().toISOString(),
+          words: []
+        }
+      };
+    } catch (error) {
+      console.error('获取生词本失败:', error);
+      return {};
+    }
+  }
+
+  async saveVocabularyBooks(vocabularyBooks) {
+    try {
+      await chrome.storage.local.set({ vocabularyBooks });
+    } catch (error) {
+      console.error('保存生词本失败:', error);
+      throw error;
+    }
+  }
+
+  async getCurrentVocabularyBook() {
+    try {
+      const result = await chrome.storage.local.get(['currentVocabularyBook']);
+      return result.currentVocabularyBook || 'default';
+    } catch (error) {
+      console.error('获取当前生词本失败:', error);
+      return 'default';
+    }
+  }
+
+  async setCurrentVocabularyBook(bookId) {
+    try {
+      await chrome.storage.local.set({ currentVocabularyBook: bookId });
+    } catch (error) {
+      console.error('设置当前生词本失败:', error);
+      throw error;
+    }
+  }
+
+  // 兼容旧版本的函数
   async getVocabulary() {
     try {
-      // 直接使用local存储支持大容量生词表
-      const result = await chrome.storage.local.get(['vocabulary']);
-      return result.vocabulary || [];
+      const vocabularyBooks = await this.getVocabularyBooks();
+      const currentBookId = await this.getCurrentVocabularyBook();
+      return vocabularyBooks[currentBookId]?.words || [];
     } catch (error) {
       console.error('获取生词表失败:', error);
       return [];
@@ -566,24 +613,50 @@ class WordTranslator {
 
   async saveVocabulary(vocabulary) {
     try {
-      // 直接使用local存储，支持大容量数据
-      await chrome.storage.local.set({ vocabulary });
+      const vocabularyBooks = await this.getVocabularyBooks();
+      const currentBookId = await this.getCurrentVocabularyBook();
+
+      if (!vocabularyBooks[currentBookId]) {
+        vocabularyBooks[currentBookId] = {
+          id: currentBookId,
+          name: '默认生词本',
+          description: '',
+          createdAt: new Date().toISOString(),
+          words: []
+        };
+      }
+
+      vocabularyBooks[currentBookId].words = vocabulary;
+      await this.saveVocabularyBooks(vocabularyBooks);
     } catch (error) {
       console.error('保存生词表失败:', error);
       throw error;
     }
   }
 
-  async addToVocabulary(data) {
+  async addToVocabulary(data, bookId = null) {
     try {
-      // 获取现有生词表
-      const vocabulary = await this.getVocabulary();
+      // 如果没有指定生词本，显示选择界面
+      if (!bookId) {
+        this.showVocabularyBookSelector(data);
+        return;
+      }
+
+      const vocabularyBooks = await this.getVocabularyBooks();
+
+      // 确保生词本存在
+      if (!vocabularyBooks[bookId]) {
+        this.showMessage('生词本不存在');
+        return;
+      }
+
+      const vocabulary = vocabularyBooks[bookId].words || [];
 
       // 检查是否已存在
       const exists = vocabulary.some(item => item.word.toLowerCase() === data.word.toLowerCase());
 
       if (exists) {
-        this.showMessage('该单词已在生词表中');
+        this.showMessage('该单词已在此生词本中');
         return;
       }
 
@@ -595,19 +668,241 @@ class WordTranslator {
         addedAt: new Date().toISOString(),
         ankiSynced: false,
         ankiNoteId: null,
-        syncedAt: null
+        syncedAt: null,
+        bookId: bookId
       };
 
       vocabulary.unshift(newWord); // 添加到开头
+      vocabularyBooks[bookId].words = vocabulary;
 
-      // 保存到存储（支持大容量生词表）
-      await this.saveVocabulary(vocabulary);
+      // 保存到存储
+      await this.saveVocabularyBooks(vocabularyBooks);
 
-      this.showMessage('已添加到生词表');
+      this.showMessage(`已添加到"${vocabularyBooks[bookId].name}"`);
 
     } catch (error) {
       console.error('添加生词失败:', error);
       this.showMessage('添加失败');
+    }
+  }
+
+  showVocabularyBookSelector(data) {
+    // 创建生词本选择界面
+    const selector = document.createElement('div');
+    selector.className = 'vocabulary-book-selector';
+    selector.innerHTML = `
+      <div class="book-selector-content">
+        <div class="book-selector-header">
+          <h3>选择生词本</h3>
+          <button class="close-selector">✕</button>
+        </div>
+        <div class="book-selector-body">
+          <div class="word-info">
+            <strong>${data.word}</strong> - ${data.translation}
+          </div>
+          <div class="book-list" id="bookList">
+            <div class="loading">加载中...</div>
+          </div>
+          <div class="book-actions">
+            <button class="create-book-btn">+ 创建新生词本</button>
+          </div>
+        </div>
+      </div>
+    `;
+
+    // 添加样式
+    selector.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 10000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    `;
+
+    document.body.appendChild(selector);
+
+    // 加载生词本列表
+    this.loadBookList(data);
+
+    // 绑定事件
+    selector.querySelector('.close-selector').onclick = () => {
+      document.body.removeChild(selector);
+    };
+
+    selector.querySelector('.create-book-btn').onclick = () => {
+      this.showCreateBookDialog(data);
+    };
+
+    // 点击外部关闭
+    selector.onclick = (e) => {
+      if (e.target === selector) {
+        document.body.removeChild(selector);
+      }
+    };
+  }
+
+  async loadBookList(data) {
+    try {
+      const vocabularyBooks = await this.getVocabularyBooks();
+      const currentBookId = await this.getCurrentVocabularyBook();
+      const bookList = document.getElementById('bookList');
+
+      if (!bookList) return;
+
+      const books = Object.values(vocabularyBooks);
+
+      if (books.length === 0) {
+        bookList.innerHTML = '<div class="no-books">暂无生词本</div>';
+        return;
+      }
+
+      const html = books.map(book => `
+        <div class="book-item ${book.id === currentBookId ? 'current' : ''}" data-book-id="${book.id}">
+          <div class="book-info">
+            <div class="book-name">${book.name}</div>
+            <div class="book-stats">${book.words?.length || 0} 个单词</div>
+          </div>
+          <button class="select-book-btn" data-book-id="${book.id}">选择</button>
+        </div>
+      `).join('');
+
+      bookList.innerHTML = html;
+
+      // 绑定选择事件
+      bookList.querySelectorAll('.select-book-btn').forEach(btn => {
+        btn.onclick = (e) => {
+          e.stopPropagation();
+          const bookId = btn.getAttribute('data-book-id');
+          this.addToVocabulary(data, bookId);
+
+          // 关闭选择器
+          const selector = document.querySelector('.vocabulary-book-selector');
+          if (selector) {
+            document.body.removeChild(selector);
+          }
+        };
+      });
+
+    } catch (error) {
+      console.error('加载生词本列表失败:', error);
+      const bookList = document.getElementById('bookList');
+      if (bookList) {
+        bookList.innerHTML = '<div class="error">加载失败</div>';
+      }
+    }
+  }
+
+  showCreateBookDialog(data) {
+    const dialog = document.createElement('div');
+    dialog.className = 'create-book-dialog';
+    dialog.innerHTML = `
+      <div class="dialog-content">
+        <div class="dialog-header">
+          <h3>创建新生词本</h3>
+          <button class="close-dialog">✕</button>
+        </div>
+        <div class="dialog-body">
+          <div class="form-group">
+            <label>生词本名称：</label>
+            <input type="text" id="bookName" placeholder="请输入生词本名称" maxlength="50">
+          </div>
+          <div class="form-group">
+            <label>描述（可选）：</label>
+            <textarea id="bookDescription" placeholder="请输入生词本描述" maxlength="200"></textarea>
+          </div>
+        </div>
+        <div class="dialog-footer">
+          <button class="cancel-btn">取消</button>
+          <button class="create-btn">创建并添加</button>
+        </div>
+      </div>
+    `;
+
+    dialog.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.7);
+      z-index: 10001;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    `;
+
+    document.body.appendChild(dialog);
+
+    // 绑定事件
+    const closeDialog = () => {
+      document.body.removeChild(dialog);
+    };
+
+    dialog.querySelector('.close-dialog').onclick = closeDialog;
+    dialog.querySelector('.cancel-btn').onclick = closeDialog;
+
+    dialog.querySelector('.create-btn').onclick = async () => {
+      const name = dialog.querySelector('#bookName').value.trim();
+      const description = dialog.querySelector('#bookDescription').value.trim();
+
+      if (!name) {
+        alert('请输入生词本名称');
+        return;
+      }
+
+      try {
+        const bookId = await this.createVocabularyBook(name, description);
+        closeDialog();
+
+        // 关闭生词本选择器
+        const selector = document.querySelector('.vocabulary-book-selector');
+        if (selector) {
+          document.body.removeChild(selector);
+        }
+
+        // 添加到新创建的生词本
+        this.addToVocabulary(data, bookId);
+      } catch (error) {
+        alert('创建生词本失败：' + error.message);
+      }
+    };
+
+    // 点击外部关闭
+    dialog.onclick = (e) => {
+      if (e.target === dialog) {
+        closeDialog();
+      }
+    };
+
+    // 自动聚焦到名称输入框
+    setTimeout(() => {
+      dialog.querySelector('#bookName').focus();
+    }, 100);
+  }
+
+  async createVocabularyBook(name, description = '') {
+    try {
+      const vocabularyBooks = await this.getVocabularyBooks();
+      const bookId = 'book_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+
+      vocabularyBooks[bookId] = {
+        id: bookId,
+        name: name,
+        description: description,
+        createdAt: new Date().toISOString(),
+        words: []
+      };
+
+      await this.saveVocabularyBooks(vocabularyBooks);
+      return bookId;
+    } catch (error) {
+      console.error('创建生词本失败:', error);
+      throw error;
     }
   }
 

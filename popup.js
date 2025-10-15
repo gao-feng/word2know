@@ -25,9 +25,12 @@ document.addEventListener('DOMContentLoaded', function() {
   const clearVocabBtn = document.getElementById('clearVocab');
   const exportAnkiBtn = document.getElementById('exportAnki');
   const syncAnkiBtn = document.getElementById('syncAnki');
+  const vocabularyBookSelect = document.getElementById('vocabularyBookSelect');
+  const manageBooksBtn = document.getElementById('manageBooks');
   
   // 加载设置和生词表
   loadSettings();
+  loadVocabularyBooks();
   loadVocabulary();
   
   // 绑定设置事件
@@ -93,6 +96,19 @@ document.addEventListener('DOMContentLoaded', function() {
   // 绑定同步Anki事件
   syncAnkiBtn.addEventListener('click', function() {
     syncToAnki();
+  });
+
+  // 绑定生词本选择事件
+  vocabularyBookSelect.addEventListener('change', function() {
+    const bookId = this.value;
+    if (bookId) {
+      setCurrentVocabularyBook(bookId);
+    }
+  });
+
+  // 绑定生词本管理事件
+  manageBooksBtn.addEventListener('click', function() {
+    showVocabularyBookManager();
   });
   
   function loadSettings() {
@@ -175,12 +191,60 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   }
 
-  // 存储操作辅助函数 - 使用local存储支持大容量数据
+  // 存储操作辅助函数 - 支持多生词本
+  async function getVocabularyBooks() {
+    try {
+      const result = await chrome.storage.local.get(['vocabularyBooks']);
+      return result.vocabularyBooks || {
+        'default': {
+          id: 'default',
+          name: '默认生词本',
+          description: '默认的生词本',
+          createdAt: new Date().toISOString(),
+          words: []
+        }
+      };
+    } catch (error) {
+      console.error('获取生词本失败:', error);
+      return {};
+    }
+  }
+
+  async function saveVocabularyBooks(vocabularyBooks) {
+    try {
+      await chrome.storage.local.set({ vocabularyBooks });
+    } catch (error) {
+      console.error('保存生词本失败:', error);
+      throw error;
+    }
+  }
+
+  async function getCurrentVocabularyBook() {
+    try {
+      const result = await chrome.storage.local.get(['currentVocabularyBook']);
+      return result.currentVocabularyBook || 'default';
+    } catch (error) {
+      console.error('获取当前生词本失败:', error);
+      return 'default';
+    }
+  }
+
+  async function setCurrentVocabularyBook(bookId) {
+    try {
+      await chrome.storage.local.set({ currentVocabularyBook: bookId });
+      loadVocabulary(); // 重新加载生词表
+    } catch (error) {
+      console.error('设置当前生词本失败:', error);
+      throw error;
+    }
+  }
+
+  // 兼容旧版本的函数
   async function getVocabulary() {
     try {
-      // 直接使用local存储支持大容量生词表
-      const result = await chrome.storage.local.get(['vocabulary']);
-      return result.vocabulary || [];
+      const vocabularyBooks = await getVocabularyBooks();
+      const currentBookId = await getCurrentVocabularyBook();
+      return vocabularyBooks[currentBookId]?.words || [];
     } catch (error) {
       console.error('获取生词表失败:', error);
       return [];
@@ -189,8 +253,21 @@ document.addEventListener('DOMContentLoaded', function() {
 
   async function saveVocabulary(vocabulary) {
     try {
-      // 直接使用local存储，支持大容量数据
-      await chrome.storage.local.set({ vocabulary });
+      const vocabularyBooks = await getVocabularyBooks();
+      const currentBookId = await getCurrentVocabularyBook();
+      
+      if (!vocabularyBooks[currentBookId]) {
+        vocabularyBooks[currentBookId] = {
+          id: currentBookId,
+          name: '默认生词本',
+          description: '',
+          createdAt: new Date().toISOString(),
+          words: []
+        };
+      }
+      
+      vocabularyBooks[currentBookId].words = vocabulary;
+      await saveVocabularyBooks(vocabularyBooks);
     } catch (error) {
       console.error('保存生词表失败:', error);
       throw error;
@@ -916,6 +993,343 @@ document.addEventListener('DOMContentLoaded', function() {
       script.onerror = () => reject(new Error('无法加载OpenAITranslator模块'));
       document.head.appendChild(script);
     });
+  }
+
+  // 加载生词本列表
+  async function loadVocabularyBooks() {
+    try {
+      const vocabularyBooks = await getVocabularyBooks();
+      const currentBookId = await getCurrentVocabularyBook();
+      
+      // 清空选择器
+      vocabularyBookSelect.innerHTML = '';
+      
+      // 添加生词本选项
+      Object.values(vocabularyBooks).forEach(book => {
+        const option = document.createElement('option');
+        option.value = book.id;
+        option.textContent = `${book.name} (${book.words?.length || 0})`;
+        if (book.id === currentBookId) {
+          option.selected = true;
+        }
+        vocabularyBookSelect.appendChild(option);
+      });
+    } catch (error) {
+      console.error('加载生词本列表失败:', error);
+      vocabularyBookSelect.innerHTML = '<option value="">加载失败</option>';
+    }
+  }
+
+  // 显示生词本管理器
+  function showVocabularyBookManager() {
+    // 创建管理界面
+    const manager = document.createElement('div');
+    manager.className = 'vocabulary-book-manager';
+    manager.innerHTML = `
+      <div class="manager-content">
+        <div class="manager-header">
+          <h3>生词本管理</h3>
+          <button class="close-manager">✕</button>
+        </div>
+        <div class="manager-body">
+          <div class="manager-actions">
+            <button class="create-new-book">+ 创建新生词本</button>
+          </div>
+          <div class="book-list-manager" id="bookListManager">
+            <div class="loading">加载中...</div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    // 添加样式
+    manager.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 10000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    `;
+
+    document.body.appendChild(manager);
+
+    // 加载生词本列表
+    loadBookListForManager();
+
+    // 绑定事件
+    manager.querySelector('.close-manager').onclick = () => {
+      document.body.removeChild(manager);
+    };
+
+    manager.querySelector('.create-new-book').onclick = () => {
+      showCreateBookDialog();
+    };
+
+    // 点击外部关闭
+    manager.onclick = (e) => {
+      if (e.target === manager) {
+        document.body.removeChild(manager);
+      }
+    };
+  }
+
+  // 为管理器加载生词本列表
+  async function loadBookListForManager() {
+    try {
+      const vocabularyBooks = await getVocabularyBooks();
+      const currentBookId = await getCurrentVocabularyBook();
+      const bookListManager = document.getElementById('bookListManager');
+
+      if (!bookListManager) return;
+
+      const books = Object.values(vocabularyBooks);
+      
+      if (books.length === 0) {
+        bookListManager.innerHTML = '<div class="no-books">暂无生词本</div>';
+        return;
+      }
+
+      const html = books.map(book => `
+        <div class="book-manager-item ${book.id === currentBookId ? 'current' : ''}" data-book-id="${book.id}">
+          <div class="book-manager-info">
+            <div class="book-manager-name">${book.name}</div>
+            <div class="book-manager-description">${book.description || '无描述'}</div>
+            <div class="book-manager-stats">${book.words?.length || 0} 个单词 • 创建于 ${new Date(book.createdAt).toLocaleDateString()}</div>
+          </div>
+          <div class="book-manager-actions">
+            ${book.id === currentBookId ? '<span class="current-badge">当前</span>' : `<button class="switch-book-btn" data-book-id="${book.id}">切换</button>`}
+            ${book.id !== 'default' ? `<button class="edit-book-btn" data-book-id="${book.id}">编辑</button>` : ''}
+            ${book.id !== 'default' ? `<button class="delete-book-btn" data-book-id="${book.id}">删除</button>` : ''}
+          </div>
+        </div>
+      `).join('');
+
+      bookListManager.innerHTML = html;
+
+      // 绑定按钮事件
+      bookListManager.querySelectorAll('.switch-book-btn').forEach(btn => {
+        btn.onclick = async (e) => {
+          e.stopPropagation();
+          const bookId = btn.getAttribute('data-book-id');
+          await setCurrentVocabularyBook(bookId);
+          loadVocabularyBooks(); // 刷新选择器
+          loadBookListForManager(); // 刷新管理器列表
+        };
+      });
+
+      bookListManager.querySelectorAll('.edit-book-btn').forEach(btn => {
+        btn.onclick = (e) => {
+          e.stopPropagation();
+          const bookId = btn.getAttribute('data-book-id');
+          editVocabularyBook(bookId);
+        };
+      });
+
+      bookListManager.querySelectorAll('.delete-book-btn').forEach(btn => {
+        btn.onclick = (e) => {
+          e.stopPropagation();
+          const bookId = btn.getAttribute('data-book-id');
+          deleteVocabularyBook(bookId);
+        };
+      });
+
+    } catch (error) {
+      console.error('加载生词本列表失败:', error);
+      const bookListManager = document.getElementById('bookListManager');
+      if (bookListManager) {
+        bookListManager.innerHTML = '<div class="error">加载失败</div>';
+      }
+    }
+  }
+
+  // 创建新生词本对话框
+  function showCreateBookDialog() {
+    const dialog = document.createElement('div');
+    dialog.className = 'create-book-dialog-popup';
+    dialog.innerHTML = `
+      <div class="dialog-content-popup">
+        <div class="dialog-header-popup">
+          <h3>创建新生词本</h3>
+          <button class="close-dialog-popup">✕</button>
+        </div>
+        <div class="dialog-body-popup">
+          <div class="form-group-popup">
+            <label>生词本名称：</label>
+            <input type="text" id="bookNamePopup" placeholder="请输入生词本名称" maxlength="50">
+          </div>
+          <div class="form-group-popup">
+            <label>描述（可选）：</label>
+            <textarea id="bookDescriptionPopup" placeholder="请输入生词本描述" maxlength="200"></textarea>
+          </div>
+        </div>
+        <div class="dialog-footer-popup">
+          <button class="cancel-btn-popup">取消</button>
+          <button class="create-btn-popup">创建</button>
+        </div>
+      </div>
+    `;
+
+    dialog.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.7);
+      z-index: 10001;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    `;
+
+    document.body.appendChild(dialog);
+
+    // 绑定事件
+    const closeDialog = () => {
+      document.body.removeChild(dialog);
+    };
+
+    dialog.querySelector('.close-dialog-popup').onclick = closeDialog;
+    dialog.querySelector('.cancel-btn-popup').onclick = closeDialog;
+
+    dialog.querySelector('.create-btn-popup').onclick = async () => {
+      const name = dialog.querySelector('#bookNamePopup').value.trim();
+      const description = dialog.querySelector('#bookDescriptionPopup').value.trim();
+
+      if (!name) {
+        alert('请输入生词本名称');
+        return;
+      }
+
+      try {
+        await createVocabularyBook(name, description);
+        closeDialog();
+        loadVocabularyBooks(); // 刷新选择器
+        loadBookListForManager(); // 刷新管理器列表
+        showMessage('生词本创建成功', 'success');
+      } catch (error) {
+        alert('创建生词本失败：' + error.message);
+      }
+    };
+
+    // 点击外部关闭
+    dialog.onclick = (e) => {
+      if (e.target === dialog) {
+        closeDialog();
+      }
+    };
+
+    // 自动聚焦到名称输入框
+    setTimeout(() => {
+      dialog.querySelector('#bookNamePopup').focus();
+    }, 100);
+  }
+
+  // 创建生词本
+  async function createVocabularyBook(name, description = '') {
+    try {
+      const vocabularyBooks = await getVocabularyBooks();
+      const bookId = 'book_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+      
+      vocabularyBooks[bookId] = {
+        id: bookId,
+        name: name,
+        description: description,
+        createdAt: new Date().toISOString(),
+        words: []
+      };
+
+      await saveVocabularyBooks(vocabularyBooks);
+      return bookId;
+    } catch (error) {
+      console.error('创建生词本失败:', error);
+      throw error;
+    }
+  }
+
+  // 编辑生词本
+  async function editVocabularyBook(bookId) {
+    try {
+      const vocabularyBooks = await getVocabularyBooks();
+      const book = vocabularyBooks[bookId];
+      
+      if (!book) {
+        alert('生词本不存在');
+        return;
+      }
+
+      const newName = prompt('请输入新的生词本名称：', book.name);
+      if (newName === null) return; // 用户取消
+      
+      if (!newName.trim()) {
+        alert('生词本名称不能为空');
+        return;
+      }
+
+      const newDescription = prompt('请输入新的描述（可选）：', book.description || '');
+      if (newDescription === null) return; // 用户取消
+
+      book.name = newName.trim();
+      book.description = newDescription?.trim() || '';
+      
+      await saveVocabularyBooks(vocabularyBooks);
+      loadVocabularyBooks(); // 刷新选择器
+      loadBookListForManager(); // 刷新管理器列表
+      showMessage('生词本更新成功', 'success');
+    } catch (error) {
+      console.error('编辑生词本失败:', error);
+      alert('编辑生词本失败：' + error.message);
+    }
+  }
+
+  // 删除生词本
+  async function deleteVocabularyBook(bookId) {
+    try {
+      const vocabularyBooks = await getVocabularyBooks();
+      const book = vocabularyBooks[bookId];
+      
+      if (!book) {
+        alert('生词本不存在');
+        return;
+      }
+
+      if (bookId === 'default') {
+        alert('默认生词本不能删除');
+        return;
+      }
+
+      const wordCount = book.words?.length || 0;
+      const confirmMessage = wordCount > 0 
+        ? `确定要删除生词本"${book.name}"吗？\n这将同时删除其中的 ${wordCount} 个生词，此操作不可恢复！`
+        : `确定要删除生词本"${book.name}"吗？`;
+
+      if (!confirm(confirmMessage)) {
+        return;
+      }
+
+      delete vocabularyBooks[bookId];
+      
+      // 如果删除的是当前生词本，切换到默认生词本
+      const currentBookId = await getCurrentVocabularyBook();
+      if (currentBookId === bookId) {
+        await setCurrentVocabularyBook('default');
+      }
+      
+      await saveVocabularyBooks(vocabularyBooks);
+      loadVocabularyBooks(); // 刷新选择器
+      loadBookListForManager(); // 刷新管理器列表
+      showMessage('生词本删除成功', 'success');
+    } catch (error) {
+      console.error('删除生词本失败:', error);
+      alert('删除生词本失败：' + error.message);
+    }
   }
 
   // 在页面加载时加载SiliconFlowTranslator

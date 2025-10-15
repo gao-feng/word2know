@@ -303,6 +303,21 @@
       color: #1565c0;
       border: 1px solid #bbdefb;
     }
+
+    .vocabulary-book-header {
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid #e0e0e0;
+    }
+
+    .book-selector-wrapper {
+      margin-bottom: 8px;
+    }
+
+    #manageBooks:hover {
+      background: #e3f2fd;
+      border-color: #1565c0;
+    }
   </style>
 </head>
 <body>
@@ -426,6 +441,19 @@
   </div>
 
   <div class="tab-content" id="vocabularyTab" style="display: none;">
+    <!-- 生词本选择器 -->
+    <div class="vocabulary-book-header">
+      <div class="book-selector-wrapper">
+        <label style="font-size: 12px; color: #666; margin-bottom: 4px; display: block;">当前生词本：</label>
+        <div style="display: flex; gap: 8px; align-items: center;">
+          <select id="vocabularyBookSelect" style="flex: 1; padding: 6px 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px;">
+            <option value="">加载中...</option>
+          </select>
+          <button id="manageBooks" title="管理生词本" style="padding: 6px 8px; border: 1px solid #1976d2; background: white; color: #1976d2; border-radius: 4px; cursor: pointer; font-size: 12px;">📚</button>
+        </div>
+      </div>
+    </div>
+
     <div class="vocabulary-header">
       <div class="vocab-stats">
         <span id="vocabCount">0</span> 个生词
