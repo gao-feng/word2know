@@ -175,11 +175,36 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   }
 
-  function loadVocabulary() {
-    chrome.storage.sync.get(['vocabulary'], function(result) {
-      const vocabulary = result.vocabulary || [];
+  // 存储操作辅助函数 - 使用local存储支持大容量数据
+  async function getVocabulary() {
+    try {
+      // 直接使用local存储支持大容量生词表
+      const result = await chrome.storage.local.get(['vocabulary']);
+      return result.vocabulary || [];
+    } catch (error) {
+      console.error('获取生词表失败:', error);
+      return [];
+    }
+  }
+
+  async function saveVocabulary(vocabulary) {
+    try {
+      // 直接使用local存储，支持大容量数据
+      await chrome.storage.local.set({ vocabulary });
+    } catch (error) {
+      console.error('保存生词表失败:', error);
+      throw error;
+    }
+  }
+
+  async function loadVocabulary() {
+    try {
+      const vocabulary = await getVocabulary();
       displayVocabulary(vocabulary);
-    });
+    } catch (error) {
+      console.error('Failed to load vocabulary:', error);
+      displayVocabulary([]);
+    }
   }
 
   function displayVocabulary(vocabulary) {
@@ -257,10 +282,14 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   }
 
-  function clearVocabulary() {
-    chrome.storage.sync.set({ vocabulary: [] }, function() {
+  async function clearVocabulary() {
+    try {
+      await saveVocabulary([]);
       loadVocabulary();
-    });
+    } catch (error) {
+      console.error('清空生词表失败:', error);
+      showMessage(`清空失败: ${error.message}`, 'error');
+    }
   }
 
   // 发音函数
@@ -277,26 +306,28 @@ document.addEventListener('DOMContentLoaded', function() {
   window.speakWord = speakWord;
 
   // 保留旧的removeWord函数以兼容性（如果有其他地方调用）
-  window.removeWord = function(index) {
-    chrome.storage.sync.get(['vocabulary'], function(result) {
-      const vocabulary = result.vocabulary || [];
+  window.removeWord = async function(index) {
+    try {
+      const vocabulary = await getVocabulary();
       if (index >= 0 && index < vocabulary.length) {
         vocabulary.splice(index, 1);
-        chrome.storage.sync.set({ vocabulary }, function() {
-          loadVocabulary();
-        });
+        await saveVocabulary(vocabulary);
+        loadVocabulary();
       }
-    });
+    } catch (error) {
+      console.error('删除生词失败:', error);
+      showMessage(`删除失败: ${error.message}`, 'error');
+    }
   };
 
   // 新的安全删除函数，使用单词和添加时间作为唯一标识
-  function removeWordSafe(word, addedAt) {
+  async function removeWordSafe(word, addedAt) {
     if (!confirm(`确定要删除生词 "${word}" 吗？`)) {
       return;
     }
 
-    chrome.storage.sync.get(['vocabulary'], function(result) {
-      const vocabulary = result.vocabulary || [];
+    try {
+      const vocabulary = await getVocabulary();
       
       // 使用单词和添加时间来精确匹配要删除的生词
       const indexToRemove = vocabulary.findIndex(item => 
@@ -307,29 +338,26 @@ document.addEventListener('DOMContentLoaded', function() {
         const removedWord = vocabulary[indexToRemove];
         vocabulary.splice(indexToRemove, 1);
         
-        chrome.storage.sync.set({ vocabulary }, function() {
-          if (chrome.runtime.lastError) {
-            console.error('删除生词失败:', chrome.runtime.lastError);
-            showMessage(`删除失败: ${chrome.runtime.lastError.message}`, 'error');
-          } else {
-            console.log(`成功删除生词: ${removedWord.word}`);
-            showMessage(`已删除生词: ${removedWord.word}`, 'success');
-            loadVocabulary();
-          }
-        });
+        await saveVocabulary(vocabulary);
+        console.log(`成功删除生词: ${removedWord.word}`);
+        showMessage(`已删除生词: ${removedWord.word}`, 'success');
+        loadVocabulary();
       } else {
         console.warn(`未找到要删除的生词: ${word}`);
         showMessage('未找到要删除的生词', 'error');
       }
-    });
+    } catch (error) {
+      console.error('删除生词失败:', error);
+      showMessage(`删除失败: ${error.message}`, 'error');
+    }
   }
 
   // 保持全局函数以兼容其他可能的调用
   window.removeWordSafe = removeWordSafe;
 
-  function exportToAnki() {
-    chrome.storage.sync.get(['vocabulary'], function(result) {
-      const vocabulary = result.vocabulary || [];
+  async function exportToAnki() {
+    try {
+      const vocabulary = await getVocabulary();
       
       if (vocabulary.length === 0) {
         alert('生词表为空，无法导出');
@@ -358,7 +386,10 @@ document.addEventListener('DOMContentLoaded', function() {
         // 如果浏览器不支持下载，显示内容让用户复制
         showExportContent(csvContent);
       }
-    });
+    } catch (error) {
+      console.error('导出失败:', error);
+      alert(`导出失败: ${error.message}`);
+    }
   }
 
   function generateAnkiCSV(vocabulary) {
@@ -467,8 +498,7 @@ document.addEventListener('DOMContentLoaded', function() {
       }
 
       // 获取生词表
-      const result = await chrome.storage.sync.get(['vocabulary']);
-      const vocabulary = result.vocabulary || [];
+      const vocabulary = await getVocabulary();
       
       // 检查牌组是否存在，如果不存在则创建
       const deckName = '英语生词';
@@ -492,7 +522,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         if (needsReset) {
-          await chrome.storage.sync.set({ vocabulary });
+          await saveVocabulary(vocabulary);
           console.log('已重置所有生词的同步状态');
         }
       }
@@ -540,7 +570,7 @@ document.addEventListener('DOMContentLoaded', function() {
       }
 
       // 保存更新后的生词表
-      await chrome.storage.sync.set({ vocabulary });
+      await saveVocabulary(vocabulary);
       
       // 刷新显示
       loadVocabulary();

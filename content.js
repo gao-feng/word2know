@@ -552,11 +552,32 @@ class WordTranslator {
     }
   }
 
+  // 存储操作辅助函数 - 使用local存储支持大容量数据
+  async getVocabulary() {
+    try {
+      // 直接使用local存储支持大容量生词表
+      const result = await chrome.storage.local.get(['vocabulary']);
+      return result.vocabulary || [];
+    } catch (error) {
+      console.error('获取生词表失败:', error);
+      return [];
+    }
+  }
+
+  async saveVocabulary(vocabulary) {
+    try {
+      // 直接使用local存储，支持大容量数据
+      await chrome.storage.local.set({ vocabulary });
+    } catch (error) {
+      console.error('保存生词表失败:', error);
+      throw error;
+    }
+  }
+
   async addToVocabulary(data) {
     try {
       // 获取现有生词表
-      const result = await chrome.storage.sync.get(['vocabulary']);
-      const vocabulary = result.vocabulary || [];
+      const vocabulary = await this.getVocabulary();
 
       // 检查是否已存在
       const exists = vocabulary.some(item => item.word.toLowerCase() === data.word.toLowerCase());
@@ -579,13 +600,8 @@ class WordTranslator {
 
       vocabulary.unshift(newWord); // 添加到开头
 
-      // 限制生词表大小（最多500个）
-      if (vocabulary.length > 500) {
-        vocabulary.splice(500);
-      }
-
-      // 保存到存储
-      await chrome.storage.sync.set({ vocabulary });
+      // 保存到存储（支持大容量生词表）
+      await this.saveVocabulary(vocabulary);
 
       this.showMessage('已添加到生词表');
 
