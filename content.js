@@ -9,7 +9,7 @@ class WordTranslator {
     this.settings = {
       enabled: true,
       autoSpeak: false,
-      translationService: 'google', // 默认使用Google翻译
+      translationService: 'openai', // 默认使用OpenAI翻译
       clipboardEnabled: true // 默认启用剪切板监听
     };
     this.selectedText = '';
@@ -34,7 +34,7 @@ class WordTranslator {
     chrome.storage.sync.get(['enabled', 'autoSpeak', 'translationService', 'clipboardEnabled'], (result) => {
       this.settings.enabled = result.enabled !== false;
       this.settings.autoSpeak = result.autoSpeak === true;
-      this.settings.translationService = result.translationService || 'google';
+      this.settings.translationService = result.translationService || 'openai';
       this.settings.clipboardEnabled = result.clipboardEnabled !== false;
 
       // 根据设置启动或停止剪切板监听
