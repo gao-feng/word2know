@@ -673,11 +673,117 @@ class WordTranslator {
   }
 
   speakWord(word) {
-    if ('speechSynthesis' in window) {
+    if (!('speechSynthesis' in window)) {
+      console.warn('浏览器不支持语音合成');
+      this.showMessage('浏览器不支持发音功能');
+      return;
+    }
+
+    // 调试信息
+    console.log('发音调试信息:', {
+      word: word,
+      speechSynthesis: !!window.speechSynthesis,
+      voices: speechSynthesis.getVoices().length,
+      speaking: speechSynthesis.speaking,
+      pending: speechSynthesis.pending,
+      paused: speechSynthesis.paused
+    });
+
+    try {
+      // 停止当前正在播放的语音
+      speechSynthesis.cancel();
+
+      // 获取发音按钮并添加视觉反馈
+      const playBtn = this.tooltip.querySelector('.play-btn');
+      if (playBtn) {
+        playBtn.classList.add('speaking');
+        playBtn.textContent = '🔊';
+      }
+
       const utterance = new SpeechSynthesisUtterance(word);
-      utterance.lang = 'en-US';
+
+      // 根据词汇类型设置语言
+      const wordType = this.getWordType(word);
+      if (wordType === 'chinese') {
+        utterance.lang = 'zh-CN';
+      } else {
+        utterance.lang = 'en-US';
+      }
+
       utterance.rate = 0.8;
-      speechSynthesis.speak(utterance);
+      utterance.volume = 1.0;
+      utterance.pitch = 1.0;
+
+      // 添加事件监听器
+      utterance.onstart = () => {
+        console.log('开始发音:', word);
+        if (playBtn) {
+          playBtn.textContent = '🎵';
+        }
+      };
+
+      utterance.onend = () => {
+        console.log('发音结束:', word);
+        if (playBtn) {
+          playBtn.classList.remove('speaking');
+          playBtn.textContent = '🔊';
+        }
+      };
+
+      utterance.onerror = (event) => {
+        console.error('发音失败:', event.error);
+        if (playBtn) {
+          playBtn.classList.remove('speaking');
+          playBtn.textContent = '🔊';
+        }
+
+        // 根据错误类型显示不同的提示
+        let errorMessage = '发音失败';
+        switch (event.error) {
+          case 'network':
+            errorMessage = '网络错误，发音失败';
+            break;
+          case 'synthesis-unavailable':
+            errorMessage = '语音合成不可用';
+            break;
+          case 'synthesis-failed':
+            errorMessage = '语音合成失败';
+            break;
+          case 'language-unavailable':
+            errorMessage = '该语言不支持发音';
+            break;
+          case 'voice-unavailable':
+            errorMessage = '语音不可用';
+            break;
+          case 'text-too-long':
+            errorMessage = '文本过长，无法发音';
+            break;
+          case 'invalid-argument':
+            errorMessage = '发音参数错误';
+            break;
+          default:
+            errorMessage = `发音失败: ${event.error}`;
+        }
+        this.showMessage(errorMessage);
+      };
+
+      // 确保语音引擎已加载
+      if (speechSynthesis.getVoices().length === 0) {
+        speechSynthesis.addEventListener('voiceschanged', () => {
+          speechSynthesis.speak(utterance);
+        }, { once: true });
+      } else {
+        speechSynthesis.speak(utterance);
+      }
+
+    } catch (error) {
+      console.error('发音功能出错:', error);
+      const playBtn = this.tooltip.querySelector('.play-btn');
+      if (playBtn) {
+        playBtn.classList.remove('speaking');
+        playBtn.textContent = '🔊';
+      }
+      this.showMessage('发音功能出错');
     }
   }
 

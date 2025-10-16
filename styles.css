@@ -74,6 +74,18 @@
   transform: scale(0.95);
 }
 
+.play-btn.speaking {
+  background-color: #4caf50;
+  color: white;
+  animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+  100% { transform: scale(1); }
+}
+
 .add-word-btn {
   color: #ff9800;
 }
