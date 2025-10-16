@@ -1,8 +1,8 @@
 {
     "manifest_version": 3,
-    "name": "英文悬浮翻译",
-    "version": "1.2",
-    "description": "划词翻译英文单词，支持生词表管理和Anki导出",
+    "name": "中英文单词本",
+    "version": "1.4",
+    "description": "中英文词汇学习助手，支持划词翻译、生词表管理、音频发音和Anki同步",
     "permissions": [
         "activeTab",
         "storage",
@@ -37,7 +37,7 @@
     ],
     "action": {
         "default_popup": "popup.html",
-        "default_title": "英文悬浮翻译"
+        "default_title": "中英文单词本"
     },
     "web_accessible_resources": [
         {

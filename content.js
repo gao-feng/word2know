@@ -1,4 +1,4 @@
-// 英文悬浮翻译插件
+// 中英文单词本插件
 class WordTranslator {
   constructor() {
     this.tooltip = null;
