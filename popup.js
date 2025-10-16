@@ -1089,37 +1089,23 @@ document.addEventListener('DOMContentLoaded', function() {
   function showVocabularyBookManager() {
     // 创建管理界面
     const manager = document.createElement('div');
-    manager.className = 'vocabulary-book-manager';
     manager.innerHTML = `
-      <div class="manager-content">
-        <div class="manager-header">
-          <h3>生词本管理</h3>
-          <button class="close-manager">✕</button>
-        </div>
-        <div class="manager-body">
-          <div class="manager-actions">
-            <button class="create-new-book">+ 创建新生词本</button>
+      <div style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.6); z-index: 999999; display: flex; align-items: center; justify-content: center;">
+        <div style="background: white; border-radius: 12px; box-shadow: 0 8px 32px rgba(0,0,0,0.3); max-width: 600px; width: 90%; max-height: 80vh; overflow: hidden; display: flex; flex-direction: column;">
+          <div style="display: flex; align-items: center; justify-content: space-between; padding: 20px 24px 16px; border-bottom: 1px solid #e0e0e0; background: #f8f9fa;">
+            <h3 style="margin: 0; font-size: 18px; font-weight: 600; color: #333;">生词本管理</h3>
+            <button class="close-manager" style="background: none; border: none; cursor: pointer; font-size: 18px; padding: 8px; border-radius: 50%; color: #666;">✕</button>
           </div>
-          <div class="book-list-manager" id="bookListManager">
-            <div class="loading">加载中...</div>
+          <div style="padding: 20px 24px; flex: 1; overflow-y: auto; background: white;">
+            <div style="margin-bottom: 20px; text-align: center;">
+              <button class="create-new-book" style="background: #4caf50; color: white; border: none; padding: 12px 24px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 500;">+ 创建新生词本</button>
+            </div>
+            <div class="book-list-manager" id="bookListManager">
+              <div style="text-align: center; padding: 40px 20px; color: #666;">加载中...</div>
+            </div>
           </div>
         </div>
       </div>
-    `;
-
-    // 添加样式
-    manager.style.cssText = `
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(0, 0, 0, 0.5);
-      z-index: 10000;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     `;
 
     document.body.appendChild(manager);
@@ -1138,6 +1124,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // 点击外部关闭
     manager.onclick = (e) => {
+      if (e.target === manager.firstElementChild) {
+        return;
+      }
       if (e.target === manager) {
         document.body.removeChild(manager);
       }
@@ -1216,42 +1205,29 @@ document.addEventListener('DOMContentLoaded', function() {
   // 创建新生词本对话框
   function showCreateBookDialog() {
     const dialog = document.createElement('div');
-    dialog.className = 'create-book-dialog-popup';
     dialog.innerHTML = `
-      <div class="dialog-content-popup">
-        <div class="dialog-header-popup">
-          <h3>创建新生词本</h3>
-          <button class="close-dialog-popup">✕</button>
-        </div>
-        <div class="dialog-body-popup">
-          <div class="form-group-popup">
-            <label>生词本名称：</label>
-            <input type="text" id="bookNamePopup" placeholder="请输入生词本名称" maxlength="50">
+      <div style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.7); z-index: 999999; display: flex; align-items: center; justify-content: center;">
+        <div style="background: white; border-radius: 12px; box-shadow: 0 8px 32px rgba(0,0,0,0.4); max-width: 400px; width: 90%; overflow: hidden;">
+          <div style="display: flex; align-items: center; justify-content: space-between; padding: 20px 24px 16px; border-bottom: 1px solid #e0e0e0; background: #f8f9fa;">
+            <h3 style="margin: 0; font-size: 18px; font-weight: 600; color: #333;">创建新生词本</h3>
+            <button class="close-dialog-popup" style="background: none; border: none; cursor: pointer; font-size: 18px; padding: 8px; border-radius: 50%; color: #666;">✕</button>
           </div>
-          <div class="form-group-popup">
-            <label>描述（可选）：</label>
-            <textarea id="bookDescriptionPopup" placeholder="请输入生词本描述" maxlength="200"></textarea>
+          <div style="padding: 24px;">
+            <div style="margin-bottom: 20px;">
+              <label style="display: block; margin-bottom: 8px; font-weight: 500; color: #333;">生词本名称：</label>
+              <input type="text" id="bookNamePopup" placeholder="请输入生词本名称" maxlength="50" style="width: 100%; padding: 12px; border: 2px solid #e0e0e0; border-radius: 6px; font-size: 14px; box-sizing: border-box;">
+            </div>
+            <div style="margin-bottom: 20px;">
+              <label style="display: block; margin-bottom: 8px; font-weight: 500; color: #333;">描述（可选）：</label>
+              <textarea id="bookDescriptionPopup" placeholder="请输入生词本描述" maxlength="200" style="width: 100%; padding: 12px; border: 2px solid #e0e0e0; border-radius: 6px; font-size: 14px; box-sizing: border-box; resize: vertical; min-height: 80px;"></textarea>
+            </div>
           </div>
-        </div>
-        <div class="dialog-footer-popup">
-          <button class="cancel-btn-popup">取消</button>
-          <button class="create-btn-popup">创建</button>
+          <div style="display: flex; gap: 12px; padding: 16px 24px 24px; justify-content: flex-end;">
+            <button class="cancel-btn-popup" style="padding: 10px 20px; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 500; background: #f5f5f5; color: #666;">取消</button>
+            <button class="create-btn-popup" style="padding: 10px 20px; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 500; background: #4caf50; color: white;">创建</button>
+          </div>
         </div>
       </div>
-    `;
-
-    dialog.style.cssText = `
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(0, 0, 0, 0.7);
-      z-index: 10001;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     `;
 
     document.body.appendChild(dialog);

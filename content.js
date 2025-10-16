@@ -981,19 +981,7 @@ class WordTranslator {
       </div>
     `;
 
-    // 添加样式
-    selector.style.cssText = `
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(0, 0, 0, 0.5);
-      z-index: 10000;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    `;
+    // CSS样式已在styles.css中定义，不需要内联样式
 
     document.body.appendChild(selector);
 
@@ -1094,18 +1082,7 @@ class WordTranslator {
       </div>
     `;
 
-    dialog.style.cssText = `
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(0, 0, 0, 0.7);
-      z-index: 10001;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    `;
+    // CSS样式已在styles.css中定义，不需要内联样式
 
     document.body.appendChild(dialog);
 

@@ -50,7 +50,8 @@
   color: #1976d2;
 }
 
-.play-btn, .add-word-btn {
+.play-btn,
+.add-word-btn {
   background: none;
   border: none;
   cursor: pointer;
@@ -65,11 +66,13 @@
   justify-content: center;
 }
 
-.play-btn:hover, .add-word-btn:hover {
+.play-btn:hover,
+.add-word-btn:hover {
   background-color: #f5f5f5;
 }
 
-.play-btn:active, .add-word-btn:active {
+.play-btn:active,
+.add-word-btn:active {
   background-color: #e0e0e0;
   transform: scale(0.95);
 }
@@ -81,9 +84,17 @@
 }
 
 @keyframes pulse {
-  0% { transform: scale(1); }
-  50% { transform: scale(1.1); }
-  100% { transform: scale(1); }
+  0% {
+    transform: scale(1);
+  }
+
+  50% {
+    transform: scale(1.1);
+  }
+
+  100% {
+    transform: scale(1);
+  }
 }
 
 .add-word-btn {
@@ -99,10 +110,25 @@
 }
 
 @keyframes fadeInOut {
-  0% { opacity: 0; transform: translateX(-50%) translateY(-10px); }
-  20% { opacity: 1; transform: translateX(-50%) translateY(0); }
-  80% { opacity: 1; transform: translateX(-50%) translateY(0); }
-  100% { opacity: 0; transform: translateX(-50%) translateY(-10px); }
+  0% {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-10px);
+  }
+
+  20% {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+
+  80% {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-10px);
+  }
 }
 
 .close-btn {
@@ -246,12 +272,14 @@
   line-height: 1.4;
 }
 
-.synonyms, .phrases {
+.synonyms,
+.phrases {
   margin-top: 6px;
   font-size: 12px;
 }
 
-.synonyms strong, .phrases strong {
+.synonyms strong,
+.phrases strong {
   color: #333;
   font-size: 12px;
 }
@@ -293,6 +321,7 @@
     opacity: 0;
     transform: translateX(20px);
   }
+
   100% {
     opacity: 1;
     transform: translateX(0);
@@ -305,11 +334,11 @@
     max-width: 250px;
     font-size: 13px;
   }
-  
+
   .word {
     font-size: 15px;
   }
-  
+
   /* 移动设备上剪切板翻译框位置调整 */
   .word-translator-tooltip.clipboard-tooltip {
     position: fixed !important;
@@ -319,22 +348,29 @@
     max-width: calc(100vw - 20px);
   }
 }
-/* 生
-词本选择器样式 */
-.vocabulary-book-selector {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+
+/* 生词本选择器内容样式 */
+.book-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px;
+  border: 2px solid #e0e0e0;
+  border-radius: 8px;
+  margin-bottom: 12px;
+  transition: all 0.2s;
+  cursor: pointer;
+  background: white;
 }
 
-.book-selector-content {
-  background: white;
-  border-radius: 12px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
-  max-width: 480px;
-  width: 90%;
-  max-height: 80vh;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
+.book-item:hover {
+  border-color: #1976d2;
+  background: #f8f9fa;
+}
+
+.book-item.current {
+  border-color: #4caf50;
+  background: #e8f5e8;
 }
 
 .book-selector-header {
@@ -407,16 +443,17 @@
   margin-bottom: 12px;
   transition: all 0.2s;
   cursor: pointer;
+  background: white !important;
 }
 
 .book-item:hover {
   border-color: #1976d2;
-  background: #f8f9fa;
+  background: #f8f9fa !important;
 }
 
 .book-item.current {
   border-color: #4caf50;
-  background: #e8f5e8;
+  background: #e8f5e8 !important;
 }
 
 .book-item.current::after {
@@ -486,7 +523,9 @@
   transform: translateY(-1px);
 }
 
-.loading, .no-books, .error {
+.loading,
+.no-books,
+.error {
   text-align: center;
   padding: 40px 20px;
   color: #666;
@@ -496,19 +535,7 @@
   color: #d32f2f;
 }
 
-/* 创建生词本对话框样式 */
-.create-book-dialog {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-}
 
-.dialog-content {
-  background: white;
-  border-radius: 12px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-  max-width: 400px;
-  width: 90%;
-  overflow: hidden;
-}
 
 .dialog-header {
   display: flex;
@@ -628,121 +655,45 @@
 
 /* 响应式设计 */
 @media (max-width: 480px) {
+
   .book-selector-content,
   .dialog-content {
     width: 95%;
     margin: 10px;
   }
-  
+
   .book-selector-header,
   .dialog-header {
     padding: 16px 20px 12px;
   }
-  
+
   .book-selector-body,
   .dialog-body {
     padding: 16px 20px;
   }
-  
+
   .book-item {
     padding: 12px;
   }
-  
+
   .dialog-footer {
     padding: 12px 20px 20px;
   }
-}/* 生词本
-管理器样式 */
-.vocabulary-book-manager {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
-.manager-content {
-  background: white;
-  border-radius: 12px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
-  max-width: 600px;
-  width: 90%;
-  max-height: 80vh;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
-
-.manager-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 20px 24px 16px;
-  border-bottom: 1px solid #e0e0e0;
-  background: #f8f9fa;
-}
-
-.manager-header h3 {
-  margin: 0;
-  font-size: 18px;
-  font-weight: 600;
-  color: #333;
-}
-
-.close-manager {
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-size: 18px;
-  padding: 8px;
-  border-radius: 50%;
-  color: #666;
-  transition: all 0.2s;
-  width: 36px;
-  height: 36px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.close-manager:hover {
-  background: #e0e0e0;
-  color: #333;
-}
-
-.manager-body {
-  padding: 20px 24px;
-  flex: 1;
-  overflow-y: auto;
-}
-
-.manager-actions {
-  margin-bottom: 20px;
-  text-align: center;
-}
-
-.create-new-book {
-  background: #4caf50;
-  color: white;
-  border: none;
-  padding: 12px 24px;
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 14px;
-  font-weight: 500;
-  transition: all 0.2s;
-}
-
-.create-new-book:hover {
-  background: #45a049;
-  transform: translateY(-1px);
-}
-
+/* 生词本管理器内容样式 */
 .book-manager-item {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   padding: 16px;
   border: 2px solid #e0e0e0;
   border-radius: 8px;
   margin-bottom: 12px;
   transition: all 0.2s;
+  background: white;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .book-manager-item:hover {
@@ -757,6 +708,8 @@
 
 .book-manager-info {
   flex: 1;
+  min-width: 0;
+  margin-right: 16px;
 }
 
 .book-manager-name {
@@ -781,6 +734,7 @@
   display: flex;
   gap: 8px;
   align-items: center;
+  flex-shrink: 0;
 }
 
 .current-badge {
@@ -831,19 +785,177 @@
   background: #d32f2f;
 }
 
-/* 创建生词本对话框样式（弹出版本） */
-.create-book-dialog-popup {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+.manager-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid #e0e0e0;
+  background: #f8f9fa;
 }
 
-.dialog-content-popup {
-  background: white;
-  border-radius: 12px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-  max-width: 400px;
-  width: 90%;
-  overflow: hidden;
+.manager-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #333;
 }
+
+.close-manager {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 18px;
+  padding: 8px;
+  border-radius: 50%;
+  color: #666;
+  transition: all 0.2s;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.close-manager:hover {
+  background: #e0e0e0;
+  color: #333;
+}
+
+.manager-body {
+  padding: 20px 24px;
+  flex: 1;
+  overflow-y: auto;
+  background: white !important;
+  min-height: 200px;
+}
+
+.manager-actions {
+  margin-bottom: 20px;
+  text-align: center;
+}
+
+.create-new-book {
+  background: #4caf50;
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.create-new-book:hover {
+  background: #45a049;
+  transform: translateY(-1px);
+}
+
+.book-manager-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 16px;
+  border: 2px solid #e0e0e0;
+  border-radius: 8px;
+  margin-bottom: 12px;
+  transition: all 0.2s;
+  background: white !important;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.book-manager-item:hover {
+  border-color: #1976d2;
+  background: #f8f9fa !important;
+}
+
+.book-manager-item.current {
+  border-color: #4caf50;
+  background: #e8f5e8;
+}
+
+.book-manager-info {
+  flex: 1;
+  min-width: 0;
+  margin-right: 16px;
+}
+
+.book-manager-name {
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 4px;
+  font-size: 16px;
+}
+
+.book-manager-description {
+  color: #666;
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+
+.book-manager-stats {
+  font-size: 12px;
+  color: #999;
+}
+
+.book-manager-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.current-badge {
+  background: #4caf50;
+  color: white;
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-weight: 500;
+}
+
+.switch-book-btn,
+.edit-book-btn,
+.delete-book-btn {
+  padding: 6px 12px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.switch-book-btn {
+  background: #1976d2;
+  color: white;
+}
+
+.switch-book-btn:hover {
+  background: #1565c0;
+}
+
+.edit-book-btn {
+  background: #ff9800;
+  color: white;
+}
+
+.edit-book-btn:hover {
+  background: #f57c00;
+}
+
+.delete-book-btn {
+  background: #f44336;
+  color: white;
+}
+
+.delete-book-btn:hover {
+  background: #d32f2f;
+}
+
+
 
 .dialog-header-popup {
   display: flex;
@@ -959,7 +1071,9 @@
 
 .create-btn-popup:active {
   transform: translateY(0);
-}/* 中文
+}
+
+/* 中文
 词汇特殊样式 */
 .translation-content.chinese-word {
   border-left: 4px solid #ff9800;
@@ -1033,14 +1147,14 @@
 
 /* 响应式设计 - 中文词汇 */
 @media (max-width: 480px) {
+
   .etymology,
   .usage {
     font-size: 11px;
     padding: 6px;
   }
-  
+
   .word-type-badge {
     font-size: 9px;
     padding: 1px 4px;
   }
-}
