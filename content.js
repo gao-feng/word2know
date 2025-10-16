@@ -14,7 +14,7 @@ class WordTranslator {
     };
     this.selectedText = '';
     this.selectionRect = null;
-    this.siliconFlowTranslator = new SiliconFlowTranslator();
+
     this.openaiTranslator = new OpenAITranslator();
     this.lastClipboardContent = '';
     this.clipboardCheckInterval = null;
@@ -59,8 +59,7 @@ class WordTranslator {
             this.stopClipboardMonitoring();
           }
         }
-      } else if (message.action === 'updateSiliconFlowApiKey') {
-        this.siliconFlowTranslator.setApiKey(message.apiKey);
+
       } else if (message.action === 'updateOpenAIConfig') {
         this.openaiTranslator.setConfig(message.config);
       }
@@ -298,7 +297,7 @@ class WordTranslator {
 
     if (wordType === 'chinese') {
       // 中文词汇优先使用OpenAI进行详细解释
-      if (this.settings.translationService === 'openai' || this.settings.translationService === 'siliconflow') {
+      if (this.settings.translationService === 'openai') {
         return await this.fetchChineseExplanation(word);
       } else {
         return await this.fetchChineseGoogleTranslation(word);
@@ -306,8 +305,6 @@ class WordTranslator {
     } else {
       // 英文词汇使用原有逻辑
       switch (this.settings.translationService) {
-        case 'siliconflow':
-          return await this.fetchSiliconFlowTranslation(word);
         case 'openai':
           return await this.fetchOpenAITranslation(word);
         case 'google':
@@ -317,24 +314,7 @@ class WordTranslator {
     }
   }
 
-  async fetchSiliconFlowTranslation(word) {
-    try {
-      const result = await this.siliconFlowTranslator.translate(word, 'zh');
-      return {
-        word: result.word,
-        translation: result.translation,
-        pronunciation: result.pronunciation,
-        definitions: result.definitions,
-        synonyms: result.synonyms,
-        phrases: result.phrases,
-        source: 'SiliconFlow'
-      };
-    } catch (error) {
-      console.error('硅基流动翻译失败:', error);
-      // 如果硅基流动失败，回退到Google翻译
-      return await this.fetchGoogleTranslation(word);
-    }
-  }
+
 
   async fetchOpenAITranslation(word) {
     try {
@@ -405,16 +385,10 @@ class WordTranslator {
     };
   }
 
-  // 中文词汇详细解释（使用OpenAI/SiliconFlow）
+  // 中文词汇详细解释（使用OpenAI）
   async fetchChineseExplanation(word) {
     try {
-      let result;
-
-      if (this.settings.translationService === 'siliconflow') {
-        result = await this.siliconFlowTranslator.explainChinese(word);
-      } else {
-        result = await this.openaiTranslator.explainChinese(word);
-      }
+      const result = await this.openaiTranslator.explainChinese(word);
 
       return {
         word: result.word,
@@ -424,7 +398,7 @@ class WordTranslator {
         synonyms: result.synonyms || [],
         antonyms: result.antonyms || [],
         phrases: result.phrases || [],
-        source: this.settings.translationService === 'siliconflow' ? 'SiliconFlow' : 'OpenAI',
+        source: 'OpenAI',
         wordType: 'chinese'
       };
     } catch (error) {

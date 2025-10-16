@@ -217,10 +217,10 @@ class AnkiConnect {
 
       // 音频播放按钮 - 使用Anki原生播放方法
       back += `<div style="text-align: center; margin: 20px 0;">`;
-      back += `<div onclick="playAudio('${audioFilename}');" `;
-      back += `style="display: inline-block; background: #1976d2; color: white; padding: 10px 20px; border-radius: 25px; cursor: pointer; font-size: 16px; box-shadow: 0 2px 8px rgba(25,118,210,0.3); user-select: none; transition: all 0.2s;" `;
-      back += `onmouseover="this.style.background='#1565c0'; this.style.transform='scale(1.05)';" `;
-      back += `onmouseout="this.style.background='#1976d2'; this.style.transform='scale(1)';">`;
+      back += `<div onclick="playAudio('${audioFilename}');" >`;
+      // back += `style="display: inline-block; background: #1976d2; color: white; padding: 10px 20px; border-radius: 25px; cursor: pointer; font-size: 16px; box-shadow: 0 2px 8px rgba(25,118,210,0.3); user-select: none; transition: all 0.2s;" `;
+      // back += `onmouseover="this.style.background='#1565c0'; this.style.transform='scale(1.05)';" `;
+      // back += `onmouseout="this.style.background='#1976d2'; this.style.transform='scale(1)';">`;
       // 添加音频文件引用 - 使用Anki标准格式
       back += `[sound:${audioFilename}]`;
 

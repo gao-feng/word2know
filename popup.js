@@ -5,11 +5,7 @@ document.addEventListener('DOMContentLoaded', function() {
   const clipboardToggle = document.getElementById('clipboardToggle');
   const translationServiceSelect = document.getElementById('translationService');
   
-  // 硅基流动设置元素
-  const siliconFlowApiKeyInput = document.getElementById('siliconFlowApiKey');
-  const testSiliconFlowApiKeyBtn = document.getElementById('testSiliconFlowApiKey');
-  const saveSiliconFlowApiKeyBtn = document.getElementById('saveSiliconFlowApiKey');
-  const siliconFlowApiStatusDiv = document.getElementById('siliconFlowApiStatus');
+
   
   // OpenAI设置元素
   const openaiProviderSelect = document.getElementById('openaiProvider');
@@ -64,9 +60,7 @@ document.addEventListener('DOMContentLoaded', function() {
     updateApiSettingsVisibility(service);
   });
 
-  // 绑定硅基流动API设置事件
-  testSiliconFlowApiKeyBtn.addEventListener('click', testSiliconFlowApiKey);
-  saveSiliconFlowApiKeyBtn.addEventListener('click', saveSiliconFlowApiKey);
+
 
   // 绑定OpenAI API设置事件
   openaiProviderSelect.addEventListener('change', handleProviderChange);
@@ -114,13 +108,12 @@ document.addEventListener('DOMContentLoaded', function() {
   function loadSettings() {
     chrome.storage.sync.get([
       'enabled', 'autoSpeak', 'clipboardEnabled', 'translationService', 
-      'siliconFlowApiKey', 'openaiApiKey', 'openaiBaseUrl', 'openaiModel'
+      'openaiApiKey', 'openaiBaseUrl', 'openaiModel'
     ], function(result) {
       const enabled = result.enabled !== false; // 默认启用
       const autoSpeak = result.autoSpeak === true; // 默认关闭
       const clipboardEnabled = result.clipboardEnabled !== false; // 默认启用
       const translationService = result.translationService || 'google';
-      const siliconFlowApiKey = result.siliconFlowApiKey || '';
       const openaiApiKey = result.openaiApiKey || '';
       const openaiBaseUrl = result.openaiBaseUrl || 'https://api.openai.com/v1/chat/completions';
       const openaiModel = result.openaiModel || 'gpt-3.5-turbo';
@@ -129,7 +122,6 @@ document.addEventListener('DOMContentLoaded', function() {
       updateToggleState(autoSpeakToggle, autoSpeak);
       updateToggleState(clipboardToggle, clipboardEnabled);
       translationServiceSelect.value = translationService;
-      siliconFlowApiKeyInput.value = siliconFlowApiKey;
       openaiApiKeyInput.value = openaiApiKey;
       openaiBaseUrlInput.value = openaiBaseUrl;
       openaiModelInput.value = openaiModel;
@@ -779,82 +771,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // 更新API设置可见性
   function updateApiSettingsVisibility(service) {
-    const siliconflowSettings = document.getElementById('siliconflowSettings');
     const openaiSettings = document.getElementById('openaiSettings');
     
-    siliconflowSettings.style.display = service === 'siliconflow' ? 'block' : 'none';
     openaiSettings.style.display = service === 'openai' ? 'block' : 'none';
   }
 
-  // 测试硅基流动API密钥
-  async function testSiliconFlowApiKey() {
-    const apiKey = siliconFlowApiKeyInput.value.trim();
-    
-    if (!apiKey) {
-      showSiliconFlowApiStatus('请输入API密钥', 'error');
-      return;
-    }
 
-    showSiliconFlowApiStatus('正在测试连接...', 'testing');
-    testSiliconFlowApiKeyBtn.disabled = true;
-
-    try {
-      // 创建临时的翻译器实例进行测试
-      const translator = new SiliconFlowTranslator();
-      const validation = await translator.validateApiKey(apiKey);
-      
-      if (validation.valid) {
-        showSiliconFlowApiStatus('API密钥有效，连接成功！', 'success');
-      } else {
-        showSiliconFlowApiStatus(`API密钥无效: ${validation.error}`, 'error');
-      }
-    } catch (error) {
-      showSiliconFlowApiStatus(`测试失败: ${error.message}`, 'error');
-    } finally {
-      testSiliconFlowApiKeyBtn.disabled = false;
-    }
-  }
-
-  // 保存硅基流动API密钥
-  async function saveSiliconFlowApiKey() {
-    const apiKey = siliconFlowApiKeyInput.value.trim();
-    
-    if (!apiKey) {
-      showSiliconFlowApiStatus('请输入API密钥', 'error');
-      return;
-    }
-
-    try {
-      await chrome.storage.sync.set({ siliconFlowApiKey: apiKey });
-      showSiliconFlowApiStatus('API密钥已保存', 'success');
-      
-      // 通知content script更新API密钥
-      chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
-        if (tabs[0]) {
-          chrome.tabs.sendMessage(tabs[0].id, {
-            action: 'updateSiliconFlowApiKey',
-            apiKey: apiKey
-          });
-        }
-      });
-    } catch (error) {
-      showSiliconFlowApiStatus(`保存失败: ${error.message}`, 'error');
-    }
-  }
-
-  // 显示硅基流动API状态消息
-  function showSiliconFlowApiStatus(message, type) {
-    siliconFlowApiStatusDiv.textContent = message;
-    siliconFlowApiStatusDiv.className = `api-status ${type}`;
-    siliconFlowApiStatusDiv.style.display = 'block';
-    
-    // 3秒后隐藏状态消息（除非是错误）
-    if (type !== 'error') {
-      setTimeout(() => {
-        siliconFlowApiStatusDiv.style.display = 'none';
-      }, 3000);
-    }
-  }
 
   // 显示OpenAI API状态消息
   function showOpenAIApiStatus(message, type) {
@@ -870,21 +792,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   }
 
-  // 动态加载SiliconFlowTranslator类
-  function loadSiliconFlowTranslator() {
-    return new Promise((resolve, reject) => {
-      if (window.SiliconFlowTranslator) {
-        resolve();
-        return;
-      }
 
-      const script = document.createElement('script');
-      script.src = chrome.runtime.getURL('siliconflow-translator.js');
-      script.onload = () => resolve();
-      script.onerror = () => reject(new Error('无法加载SiliconFlowTranslator模块'));
-      document.head.appendChild(script);
-    });
-  }
 
   // 处理服务提供商选择变化
   function handleProviderChange() {
@@ -1018,10 +926,7 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   // 在页面加载时加载翻译器
-  Promise.all([
-    loadSiliconFlowTranslator(),
-    loadOpenAITranslator()
-  ]).catch(console.error);
+  loadOpenAITranslator().catch(console.error);
 
   // 动态加载OpenAITranslator类
   function loadOpenAITranslator() {
@@ -1376,6 +1281,5 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   }
 
-  // 在页面加载时加载SiliconFlowTranslator
-  loadSiliconFlowTranslator().catch(console.error);
+
 });
