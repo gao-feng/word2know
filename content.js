@@ -1224,6 +1224,14 @@ class WordTranslator {
         if (this.isValidWord(trimmedText)) {
           this.currentWordType = this.getWordType(trimmedText);
           this.handleClipboardTranslation(trimmedText);
+
+          // 清空剪切板内容
+          try {
+            await navigator.clipboard.writeText('');
+            console.debug('剪切板已清空');
+          } catch (clearError) {
+            console.debug('清空剪切板失败:', clearError.message);
+          }
         }
       }
     } catch (error) {
