@@ -20,6 +20,8 @@ document.addEventListener('DOMContentLoaded', function() {
   const vocabularyTab = document.getElementById('vocabularyTab');
   const clearVocabBtn = document.getElementById('clearVocab');
   const exportAnkiBtn = document.getElementById('exportAnki');
+  const importAnkiBtn = document.getElementById('importAnki');
+  const importFileInput = document.getElementById('importFileInput');
   const syncAnkiBtn = document.getElementById('syncAnki');
   const vocabularyBookSelect = document.getElementById('vocabularyBookSelect');
   const manageBooksBtn = document.getElementById('manageBooks');
@@ -85,6 +87,21 @@ document.addEventListener('DOMContentLoaded', function() {
   // 绑定导出Anki事件
   exportAnkiBtn.addEventListener('click', function() {
     exportToAnki();
+  });
+
+  // 绑定导入Anki事件
+  importAnkiBtn.addEventListener('click', function() {
+    importFileInput.click();
+  });
+
+  // 绑定文件选择事件
+  importFileInput.addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    if (file) {
+      importFromCSV(file);
+      // 清空input，允许重复选择同一文件
+      e.target.value = '';
+    }
   });
 
   // 绑定同步Anki事件
@@ -549,6 +566,12 @@ document.addEventListener('DOMContentLoaded', function() {
         return;
       }
 
+      // 获取当前单词本信息
+      const vocabularyBooks = await getVocabularyBooks();
+      const currentBookId = await getCurrentVocabularyBook();
+      const currentBook = vocabularyBooks[currentBookId];
+      const bookName = currentBook?.name || '默认生词本';
+      
       // 生成CSV格式的内容
       const csvContent = generateAnkiCSV(vocabulary);
       
@@ -558,8 +581,10 @@ document.addEventListener('DOMContentLoaded', function() {
       
       if (link.download !== undefined) {
         const url = URL.createObjectURL(blob);
+        const dateStr = new Date().toISOString().split('T')[0];
+        const fileName = `vocabulary_${bookName}_${dateStr}.csv`;
         link.setAttribute('href', url);
-        link.setAttribute('download', `vocabulary_${new Date().toISOString().split('T')[0]}.csv`);
+        link.setAttribute('download', fileName);
         link.style.visibility = 'hidden';
         document.body.appendChild(link);
         link.click();
@@ -574,6 +599,92 @@ document.addEventListener('DOMContentLoaded', function() {
     } catch (error) {
       console.error('导出失败:', error);
       alert(`导出失败: ${error.message}`);
+    }
+  }
+
+  async function importFromCSV(file) {
+    try {
+      const text = await file.text();
+      const lines = text.trim().split('\n');
+      
+      if (lines.length === 0) {
+        alert('CSV文件为空');
+        return;
+      }
+
+      const importedWords = [];
+      let successCount = 0;
+      let skipCount = 0;
+
+      // 解析CSV内容
+      for (const line of lines) {
+        try {
+          // 简单的CSV解析（处理引号包裹的字段）
+          const matches = line.match(/"([^"]*)","([^"]*)","([^"]*)"/);
+          if (matches && matches.length >= 3) {
+            const word = matches[1].trim();
+            const backContent = matches[2];
+            
+            // 从背面内容中提取翻译和发音
+            const translationMatch = backContent.match(/^([^<]+)/);
+            const pronunciationMatch = backContent.match(/<i>([^<]+)<\/i>/);
+            
+            if (word && translationMatch) {
+              const translation = translationMatch[1].trim();
+              const pronunciation = pronunciationMatch ? pronunciationMatch[1].trim() : '';
+              
+              importedWords.push({
+                word,
+                translation,
+                pronunciation,
+                addedAt: new Date().toISOString()
+              });
+              successCount++;
+            }
+          }
+        } catch (error) {
+          console.error('解析行失败:', line, error);
+          skipCount++;
+        }
+      }
+
+      if (importedWords.length === 0) {
+        alert('未能从CSV文件中解析出有效的单词');
+        return;
+      }
+
+      // 获取当前生词表
+      const currentVocabulary = await getVocabulary();
+      const existingWords = new Set(currentVocabulary.map(item => item.word.toLowerCase()));
+      
+      // 过滤掉已存在的单词
+      const newWords = importedWords.filter(item => {
+        if (existingWords.has(item.word.toLowerCase())) {
+          skipCount++;
+          return false;
+        }
+        return true;
+      });
+
+      if (newWords.length === 0) {
+        alert(`所有单词都已存在，跳过 ${skipCount} 个`);
+        return;
+      }
+
+      // 合并并保存
+      const mergedVocabulary = [...currentVocabulary, ...newWords];
+      await saveVocabulary(mergedVocabulary);
+      
+      // 重新加载显示
+      loadVocabulary();
+      
+      // 显示导入结果
+      const message = `成功导入 ${newWords.length} 个单词${skipCount > 0 ? `，跳过 ${skipCount} 个重复或无效单词` : ''}`;
+      showExportMessage(message);
+      
+    } catch (error) {
+      console.error('导入失败:', error);
+      alert(`导入失败: ${error.message}`);
     }
   }
 
@@ -687,6 +798,15 @@ document.addEventListener('DOMContentLoaded', function() {
       syncBtn.textContent = '🔄 检查牌组...';
       
       const deckNames = await ankiConnect.getDeckNames();
+      
+      // 确保父牌组"词汇助手"存在
+      const parentDeckName = '词汇助手';
+      if (!deckNames.includes(parentDeckName)) {
+        console.log(`创建父牌组 "${parentDeckName}"...`);
+        await ankiConnect.createDeck(parentDeckName);
+        showSyncMessage(`已创建父牌组 "${parentDeckName}"`, 'info');
+      }
+      
       let totalSyncedWords = 0;
       let totalSkippedWords = 0;
       const syncResults = [];
@@ -695,10 +815,10 @@ document.addEventListener('DOMContentLoaded', function() {
       for (const [bookId, book] of Object.entries(vocabularyBooks)) {
         if (!book.words || book.words.length === 0) continue;
 
-        // 生成对应的Anki牌组名称
+        // 生成对应的Anki牌组名称（子牌组）
         const deckName = generateDeckName(book);
         
-        // 检查牌组是否存在，如果不存在则创建
+        // 检查子牌组是否存在，如果不存在则创建
         if (!deckNames.includes(deckName)) {
           console.log(`牌组 "${deckName}" 不存在，正在创建...`);
           await ankiConnect.createDeck(deckName);
@@ -809,22 +929,21 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // 生成Anki牌组名称
   function generateDeckName(vocabularyBook) {
-    // 清理生词本名称，移除特殊字符
-    let deckName = vocabularyBook.name.replace(/[<>:"/\\|?*]/g, '_');
+    // 清理生词本名称，移除特殊字符（保留中文、英文、数字、空格、下划线）
+    let subDeckName = vocabularyBook.name.replace(/[<>:"/\\|?*]/g, '_');
     
-    // 添加前缀以区分不同类型的生词本
+    // 使用默认名称
     if (vocabularyBook.id === 'default') {
-      deckName = '生词本_默认';
-    } else {
-      deckName = `生词本_${deckName}`;
+      subDeckName = '默认';
     }
     
-    // 限制长度
-    if (deckName.length > 50) {
-      deckName = deckName.substring(0, 47) + '...';
+    // 限制子牌组名称长度
+    if (subDeckName.length > 40) {
+      subDeckName = subDeckName.substring(0, 37) + '...';
     }
     
-    return deckName;
+    // 使用 :: 创建子牌组结构：词汇助手::单词本名
+    return `词汇助手::${subDeckName}`;
   }
 
   // 动态加载AnkiConnect
