@@ -21,6 +21,7 @@ document.addEventListener('DOMContentLoaded', function() {
   const clearVocabBtn = document.getElementById('clearVocab');
   const exportAnkiBtn = document.getElementById('exportAnki');
   const importAnkiBtn = document.getElementById('importAnki');
+  const importFromAnkiBtn = document.getElementById('importFromAnki');
   const importFileInput = document.getElementById('importFileInput');
   const syncAnkiBtn = document.getElementById('syncAnki');
   const vocabularyBookSelect = document.getElementById('vocabularyBookSelect');
@@ -93,6 +94,13 @@ document.addEventListener('DOMContentLoaded', function() {
   importAnkiBtn.addEventListener('click', function() {
     importFileInput.click();
   });
+
+  // 绑定从Anki导入事件
+  if (importFromAnkiBtn) {
+    importFromAnkiBtn.addEventListener('click', function() {
+      importFromAnki();
+    });
+  }
 
   // 绑定文件选择事件
   importFileInput.addEventListener('change', function(e) {
@@ -685,6 +693,136 @@ document.addEventListener('DOMContentLoaded', function() {
     } catch (error) {
       console.error('导入失败:', error);
       alert(`导入失败: ${error.message}`);
+    }
+  }
+
+  // 从Anki的 "词汇助手" 牌组导入笔记，自动创建生词本（若不存在）
+  async function importFromAnki() {
+    const btn = document.getElementById('importFromAnki');
+    const originalText = btn ? btn.textContent : '';
+    try {
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = '⤵️ 连接Anki...';
+      }
+
+      const ankiConnect = await loadAnkiConnect();
+      const isConnected = await ankiConnect.checkConnection();
+      if (!isConnected) {
+        throw new Error('无法连接到Anki。请确保Anki已启动并安装AnkiConnect。');
+      }
+
+      const deckNames = await ankiConnect.getDeckNames();
+      const parentDeck = '词汇助手';
+
+      // 优先使用子牌组（parent::child），避免把父牌组的所有笔记导入到默认生词本
+      const childDecks = deckNames.filter(d => d.startsWith(parentDeck + '::'));
+      let targetDecks = [];
+      if (childDecks.length > 0) {
+        targetDecks = childDecks;
+      } else if (deckNames.includes(parentDeck)) {
+        // 如果没有任何子牌组，则导入父牌组本身
+        targetDecks = [parentDeck];
+      }
+
+      if (targetDecks.length === 0) {
+        showMessage('未在Anki中找到 "词汇助手" 牌组或其子牌组', 'error');
+        return;
+      }
+
+      const vocabularyBooks = await getVocabularyBooks();
+      let added = 0;
+      let skipped = 0;
+
+      for (const deckName of targetDecks) {
+        // 取出子牌组名作为生词本名称
+        let bookName = deckName === parentDeck ? '默认生词本' : deckName.split('::').slice(1).join('::');
+
+        // 查找是否已有同名生词本
+        let bookEntry = Object.values(vocabularyBooks).find(b => b.name === bookName);
+        if (!bookEntry) {
+          // 创建新的生词本
+          const safeId = ('anki_' + bookName).replace(/[^a-zA-Z0-9\u4e00-\u9fff_-]/g, '_').slice(0, 40) + '_' + Date.now();
+          vocabularyBooks[safeId] = {
+            id: safeId,
+            name: bookName,
+            description: `从Anki导入的牌组: ${deckName}`,
+            createdAt: new Date().toISOString(),
+            words: []
+          };
+          bookEntry = vocabularyBooks[safeId];
+          showMessage(`已创建生词本 "${bookName}"`, 'success');
+        }
+
+        // 获取该牌组下的笔记
+        const noteIds = await ankiConnect.findNotes(`deck:"${deckName}"`);
+        if (!noteIds || noteIds.length === 0) continue;
+
+        // 获取笔记详细信息
+        const notesInfo = await ankiConnect.invoke('notesInfo', { notes: noteIds });
+        if (!Array.isArray(notesInfo)) continue;
+
+        const existingWords = new Set((bookEntry.words || []).map(w => w.word.toLowerCase()));
+
+        for (const note of notesInfo) {
+          try {
+            const fields = note.fields || {};
+            const front = (fields.Front && fields.Front.value) ? fields.Front.value : '';
+            const back = (fields.Back && fields.Back.value) ? fields.Back.value : '';
+            const word = front.trim();
+            if (!word) continue;
+
+            if (existingWords.has(word.toLowerCase())) {
+              skipped++;
+              continue;
+            }
+
+            // 将back从HTML转为纯文本
+            const tmp = document.createElement('div');
+            tmp.innerHTML = back || '';
+            const backText = (tmp.textContent || tmp.innerText || '').trim();
+
+            // 尝试提取中文翻译（优先包含中文字符的片段），否则取第一行
+            const zhMatch = backText.match(/[\u4e00-\u9fff，。！？、]{2,}/);
+            const translation = zhMatch ? zhMatch[0] : (backText.split('\n')[0] || '').slice(0, 300);
+
+            // 尝试提取音标（/.../ 形式）
+            const pronMatch = backText.match(/\/([^\/]+)\//);
+            const pronunciation = pronMatch ? `/${pronMatch[1]}/` : '';
+
+            const item = {
+              word: word,
+              translation: translation,
+              pronunciation: pronunciation,
+              addedAt: new Date().toISOString(),
+              ankiSynced: true,
+              ankiNoteId: note.noteId || note.id || null,
+              ankiDeckName: deckName,
+              syncedAt: new Date().toISOString()
+            };
+
+            bookEntry.words.push(item);
+            existingWords.add(word.toLowerCase());
+            added++;
+          } catch (err) {
+            console.warn('解析Anki笔记失败', err);
+          }
+        }
+      }
+
+      await saveVocabularyBooks(vocabularyBooks);
+      loadVocabularyBooks();
+      loadVocabulary();
+
+      showMessage(`已从Anki导入 ${added} 个，跳过 ${skipped} 个`, 'success');
+    } catch (error) {
+      console.error('从Anki导入失败:', error);
+      showMessage(`从Anki导入失败: ${error.message}`, 'error');
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = originalText;
+      }
     }
   }
 
