@@ -18,6 +18,7 @@ class WordTranslator {
     this.openaiTranslator = new OpenAITranslator();
     this.lastClipboardContent = '';
     this.clipboardCheckInterval = null;
+    this.clipboardTranslatedContent = null; // 存储已翻译的剪切板内容
     this.init();
   }
 
@@ -264,12 +265,16 @@ class WordTranslator {
     this.tooltip.style.top = top + 'px';
   }
 
-  async translateWord(word) {
+  async translateWord(word, isClipboardTranslation = false) {
     if (this.isLoading) return;
 
     // 检查缓存
     if (this.cache.has(word.toLowerCase())) {
       this.displayTranslation(this.cache.get(word.toLowerCase()));
+      // 如果是剪切板翻译，标记为已翻译
+      if (isClipboardTranslation) {
+        this.markClipboardTranslationAsProcessed(word);
+      }
       return;
     }
 
@@ -281,6 +286,10 @@ class WordTranslator {
 
       if (this.currentWord === word) {
         this.displayTranslation(translation);
+        // 翻译成功后，如果是剪切板翻译，标记为已翻译
+        if (isClipboardTranslation) {
+          this.markClipboardTranslationAsProcessed(word);
+        }
       }
     } catch (error) {
       console.error('翻译失败:', error);
@@ -1223,6 +1232,7 @@ class WordTranslator {
         const trimmedText = clipboardText.trim();
         if (this.isValidWord(trimmedText)) {
           this.currentWordType = this.getWordType(trimmedText);
+          // 只在处理前检查，不要提前清除，交给 handleClipboardTranslation 处理
           this.handleClipboardTranslation(trimmedText);
         }
       }
@@ -1233,12 +1243,47 @@ class WordTranslator {
   }
 
   handleClipboardTranslation(word) {
-    // 显示剪切板翻译提示
-    this.showClipboardTooltip(word);
+    // 从全局存储中获取剪切板翻译状态
+    chrome.storage.local.get(['clipboardTranslatedContent'], (result) => {
+      const translatedContent = result.clipboardTranslatedContent;
 
-    // 自动翻译
-    this.currentWord = word;
-    this.translateWord(word);
+      // 检查该内容是否已经被翻译过（全局存储中有相同的内容）
+      if (translatedContent === word) {
+        console.debug('剪切板内容已被翻译过，跳过：', word);
+        return; // 直接返回，不做任何操作
+      }
+
+      // 到这里说明是新的剪切板内容，需要翻译
+      // 先清除旧的翻译状态
+      this.clearClipboardTranslationState();
+
+      // 显示剪切板翻译提示
+      this.showClipboardTooltip(word);
+
+      // 自动翻译
+      this.currentWord = word;
+      this.translateWord(word, true); // 标记为剪切板翻译
+    });
+  }
+
+  markClipboardTranslationAsProcessed(word) {
+    // 翻译成功后，将内容写入全局存储
+    // 下次无论在哪个页面，检查存储后都知道已翻译过
+    chrome.storage.local.set({
+      'clipboardTranslatedContent': word,
+      'clipboardTranslatedTime': new Date().getTime()
+    });
+    console.debug('已标记剪切板内容为已翻译:', word);
+  }
+
+  clearClipboardTranslationState() {
+    // 当剪切板内容改变时，清除全局存储中的翻译状态
+    // 这样新的剪切板内容会被重新翻译
+    chrome.storage.local.set({
+      'clipboardTranslatedContent': null,
+      'clipboardTranslatedTime': null
+    });
+    console.debug('已清除剪切板翻译状态');
   }
 
   showClipboardTooltip(word) {
