@@ -294,7 +294,8 @@ class WordTranslator {
     } catch (error) {
       console.error('翻译失败:', error);
       if (this.currentWord === word) {
-        this.tooltip.innerHTML = '<div class="error">翻译失败</div>';
+        const detail = error && error.message ? this.escapeHtml(error.message) : '未知错误';
+        this.tooltip.innerHTML = `<div class="error">翻译失败：${detail}</div>`;
       }
     } finally {
       this.isLoading = false;
@@ -326,6 +327,7 @@ class WordTranslator {
 
 
   async fetchOpenAITranslation(word) {
+    let openaiError = null;
     try {
       const result = await this.openaiTranslator.translate(word, 'zh');
       return {
@@ -339,8 +341,14 @@ class WordTranslator {
       };
     } catch (error) {
       console.error('OpenAI翻译失败:', error);
-      // 如果OpenAI失败，回退到Google翻译
+      openaiError = error;
+    }
+    // 如果OpenAI失败，回退到Google翻译；两者都失败时保留OpenAI的真实错误原因
+    try {
       return await this.fetchGoogleTranslation(word);
+    } catch (error) {
+      console.error('Google翻译回退失败:', error);
+      throw new Error(`${openaiError.message}；Google翻译回退也失败`);
     }
   }
 
@@ -396,6 +404,7 @@ class WordTranslator {
 
   // 中文词汇详细解释（使用OpenAI）
   async fetchChineseExplanation(word) {
+    let openaiError = null;
     try {
       const result = await this.openaiTranslator.explainChinese(word);
 
@@ -412,8 +421,14 @@ class WordTranslator {
       };
     } catch (error) {
       console.error('中文词汇解释失败:', error);
-      // 回退到简单解释
+      openaiError = error;
+    }
+    // 回退到简单解释；两者都失败时保留OpenAI的真实错误原因
+    try {
       return await this.fetchChineseGoogleTranslation(word);
+    } catch (error) {
+      console.error('中文Google翻译回退失败:', error);
+      throw new Error(`中文解释失败：${openaiError.message}；Google翻译回退也失败`);
     }
   }
 
@@ -447,17 +462,7 @@ class WordTranslator {
       };
     } catch (error) {
       console.error('中文Google翻译失败:', error);
-      return {
-        word,
-        translation: '翻译失败',
-        pronunciation: this.generateChinesePronunciation(word),
-        definitions: [],
-        synonyms: [],
-        antonyms: [],
-        phrases: [],
-        source: 'Error',
-        wordType: 'chinese'
-      };
+      throw error;
     }
   }
 
@@ -465,6 +470,13 @@ class WordTranslator {
   generateChinesePronunciation(word) {
     // 这里可以集成更专业的拼音库，暂时返回简单格式
     return `[${word}]`;
+  }
+
+  // HTML转义，用于将错误信息等动态内容安全地插入tooltip
+  escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = String(text);
+    return div.innerHTML;
   }
 
   // 生成简单的英文例句

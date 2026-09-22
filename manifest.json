@@ -11,15 +11,12 @@
         "clipboardWrite"
     ],
     "host_permissions": [
-        "https://translate.googleapis.com/*",
-        "https://translate.google.com/*",
-        "https://api.openai.com/*",
-        "https://*.openai.azure.com/*",
-        "https://api.deepseek.com/*",
-        "https://api.moonshot.cn/*",
-        "https://open.bigmodel.cn/*",
-        "http://localhost:8765/*"
+        "http://*/*",
+        "https://*/*"
     ],
+    "background": {
+        "service_worker": "background.js"
+    },
     "content_scripts": [
         {
             "matches": [

@@ -75,7 +75,7 @@ class OpenAITranslator {
   // 调用OpenAI API
   async callTranslationAPI(text, targetLang) {
     const prompt = this.buildTranslationPrompt(text, targetLang);
-    
+
     const requestBody = {
       model: this.model,
       messages: [
@@ -85,31 +85,80 @@ class OpenAITranslator {
         }
       ],
       temperature: 0.1,
-      max_tokens: 1000
+      max_tokens: 2000
     };
 
-    const response = await fetch(this.baseUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${this.apiKey}`
-      },
-      body: JSON.stringify(requestBody)
-    });
+    const data = await this.requestChatCompletion(requestBody);
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(`API请求失败: ${response.status} - ${errorData.error?.message || response.statusText}`);
-    }
-
-    const data = await response.json();
-    
     if (!data.choices || !data.choices[0] || !data.choices[0].message) {
       throw new Error('API返回数据格式错误');
     }
 
     const content = data.choices[0].message.content;
     return this.parseTranslationResponse(content, text);
+  }
+
+  // 统一请求入口：优先通过background发起（MV3下content script直接fetch受页面CORS限制）
+  async requestChatCompletion(requestBody, configOverride = null) {
+    const config = {
+      apiKey: (configOverride && configOverride.apiKey) || this.apiKey,
+      baseUrl: (configOverride && configOverride.baseUrl) || this.baseUrl,
+      model: (configOverride && configOverride.model) || this.model
+    };
+
+    if (!config.apiKey) {
+      throw new Error('请先设置OpenAI API密钥');
+    }
+    if (!config.baseUrl) {
+      throw new Error('请先设置API地址');
+    }
+
+    if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.id) {
+      const response = await new Promise((resolve, reject) => {
+        try {
+          chrome.runtime.sendMessage(
+            { action: 'openaiChat', payload: { url: config.baseUrl, apiKey: config.apiKey, body: requestBody } },
+            (resp) => {
+              if (chrome.runtime.lastError) {
+                reject(new Error(chrome.runtime.lastError.message));
+                return;
+              }
+              resolve(resp);
+            }
+          );
+        } catch (err) {
+          reject(err);
+        }
+      });
+
+      if (!response) {
+        throw new Error('后台服务未响应，请重新加载插件后重试');
+      }
+      if (!response.ok) {
+        throw new Error(response.error || 'API请求失败');
+      }
+      return response.data;
+    }
+
+    // 降级路径：无消息通道时直接请求（如Node测试环境）
+    return await this.directChatCompletion(config, requestBody);
+  }
+
+  async directChatCompletion(config, requestBody) {
+    const response = await fetch(config.baseUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${config.apiKey}`
+      },
+      body: JSON.stringify(requestBody)
+    });
+
+    if (!response.ok) {
+      throw new Error(`API请求失败: ${response.status} - ${await extractApiErrorMessage(response)}`);
+    }
+
+    return await response.json();
   }
 
   // 构建翻译提示词
@@ -160,8 +209,9 @@ class OpenAITranslator {
   // 解析翻译响应
   parseTranslationResponse(content, originalText) {
     try {
-      // 尝试解析JSON
-      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      // 清理可能的markdown格式后再提取JSON
+      const cleaned = String(content || '').replace(/```(?:json)?/gi, '');
+      const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
       if (!jsonMatch) {
         throw new Error('未找到有效的JSON响应');
       }
@@ -206,14 +256,14 @@ class OpenAITranslator {
     }
   }
 
-  // 检查API配置是否有效
+  // 检查API配置是否有效（不改动实例状态，避免与异步loadSettings竞争）
   async validateConfig(config = null) {
     const testConfig = config || {
       apiKey: this.apiKey,
       baseUrl: this.baseUrl,
       model: this.model
     };
-    
+
     if (!testConfig.apiKey) {
       return { valid: false, error: 'API密钥为空' };
     }
@@ -223,25 +273,19 @@ class OpenAITranslator {
     }
 
     try {
-      // 临时设置配置进行测试
-      const originalConfig = {
-        apiKey: this.apiKey,
-        baseUrl: this.baseUrl,
-        model: this.model
-      };
+      await this.requestChatCompletion({
+        model: testConfig.model,
+        messages: [
+          {
+            role: 'user',
+            content: 'Please reply with the single word: OK'
+          }
+        ],
+        temperature: 0,
+        max_tokens: 10
+      }, testConfig);
 
-      this.apiKey = testConfig.apiKey;
-      this.baseUrl = testConfig.baseUrl;
-      this.model = testConfig.model;
-
-      const testResult = await this.callTranslationAPI('hello', 'zh');
-      
-      // 恢复原配置
-      this.apiKey = originalConfig.apiKey;
-      this.baseUrl = originalConfig.baseUrl;
-      this.model = originalConfig.model;
-
-      return { valid: true, result: testResult };
+      return { valid: true };
     } catch (error) {
       return { valid: false, error: error.message };
     }
@@ -362,25 +406,11 @@ class OpenAITranslator {
         }
       ],
       temperature: 0.3,
-      max_tokens: 1000
+      max_tokens: 2000
     };
 
-    const response = await fetch(this.baseUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${this.apiKey}`
-      },
-      body: JSON.stringify(requestBody)
-    });
+    const data = await this.requestChatCompletion(requestBody);
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(`API请求失败: ${response.status} - ${errorData.error?.message || response.statusText}`);
-    }
-
-    const data = await response.json();
-    
     if (!data.choices || !data.choices[0] || !data.choices[0].message) {
       throw new Error('API返回数据格式错误');
     }
@@ -437,6 +467,29 @@ class OpenAITranslator {
       keys: Array.from(this.cache.keys())
     };
   }
+}
+
+// 提取各服务商不同的错误返回信息
+async function extractApiErrorMessage(response) {
+  let text = '';
+  try {
+    text = await response.text();
+  } catch (e) {
+    return response.statusText || '无法读取错误信息';
+  }
+  if (!text) {
+    return response.statusText || '无返回内容';
+  }
+  try {
+    const data = JSON.parse(text);
+    const msg = (data.error && data.error.message) || data.message || data.msg;
+    if (typeof msg === 'string' && msg) {
+      return msg;
+    }
+  } catch (e) {
+    // 非JSON响应，直接展示文本
+  }
+  return text.length > 200 ? text.slice(0, 200) + '...' : text;
 }
 
 // 导出类
